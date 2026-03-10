@@ -30,6 +30,7 @@ make web-dev
 make check
 make benchmark-demo
 make benchmark-compare
+make benchmark-codex
 ```
 
 Equivalent direct commands:
@@ -41,6 +42,7 @@ pnpm --dir web test --run
 .venv/bin/pytest harness/tests
 .venv/bin/python -m harness.cli run-all --runner demo --conditions condition_md condition_mcp
 .venv/bin/python -m harness.cli compare --runs-dir benchmark/reports/runs
+.venv/bin/python -m harness.cli run-all --runner external --conditions condition_md condition_mcp --adapter-cmd "python3 scripts/adapter_codex.py {request_file}"
 ```
 
 ## Benchmark Commands
@@ -64,6 +66,13 @@ Compare generated runs:
 
 ```bash
 make benchmark-compare
+```
+
+Run the real Codex CLI benchmark:
+
+```bash
+codex login
+make benchmark-codex
 ```
 
 ## Output Locations
@@ -99,9 +108,12 @@ These demo outputs are useful for validating the benchmark plumbing, not for mak
 
 ## Next Steps For Real Integrations
 
+- The markdown condition reads every `.md` file present in [benchmark/instructions/condition_md](/Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase/benchmark/instructions/condition_md).
+- The MCP condition reads every `.json` file present in [benchmark/instructions/condition_mcp](/Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase/benchmark/instructions/condition_mcp) and automatically enables any JSON object that contains a top-level `mcpServers` block.
+- The real Codex adapter lives in [adapter_codex.py](/Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase/scripts/adapter_codex.py) and is invoked by `make benchmark-codex`.
+- The Codex adapter adds a benchmark wrapper that tells Codex to inspect the actual repo and prefer observed repo state if the injected context conflicts with the benchmark repo.
 - Plug a real markdown/system-prompt runtime into the external adapter boundary while keeping `MdConditionRunner`.
 - Plug a real MCP runtime/context provider into the same external adapter boundary while keeping `McpConditionRunner`.
 - Keep the task specs, detectors, and reports unchanged.
 
 See [architecture](docs/architecture.md), [integration](docs/integration.md), [scoring](docs/scoring.md), and [adding tasks](docs/adding_tasks.md).
-

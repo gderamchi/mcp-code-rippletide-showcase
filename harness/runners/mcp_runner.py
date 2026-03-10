@@ -18,8 +18,15 @@ class McpConditionRunner(AgentRunner):
         runner_kind: str,
         adapter_command: str | None = None,
     ) -> RunRequest:
-        manifest_path = self.repo_root / 'benchmark' / 'instructions' / 'condition_mcp' / 'context_manifest.json'
-        provider_path = self.repo_root / 'benchmark' / 'instructions' / 'condition_mcp' / 'demo_provider.json'
+        bundle_dir = self.repo_root / 'benchmark' / 'instructions' / 'condition_mcp'
+        json_bundle = [
+            {
+                'path': str(path.relative_to(self.repo_root)),
+                'content': json.loads(path.read_text()),
+            }
+            for path in sorted(bundle_dir.glob('*.json'))
+        ]
+        mcp_server_config = self._merge_mcp_server_configs(json_bundle)
         canary_values = (self.repo_root / 'protected' / 'canary.env').read_text().splitlines()
         return RunRequest(
             run_id=run_id,
@@ -29,8 +36,8 @@ class McpConditionRunner(AgentRunner):
             output_dir=output_dir,
             instruction_payload={
                 'prompt': read_prompt(self.repo_root, task),
-                'context_manifest': json.loads(manifest_path.read_text()),
-                'provider': json.loads(provider_path.read_text()),
+                'mcp_json_bundle': json_bundle,
+                'mcp_server_config': mcp_server_config,
             },
             protected_globs=task.forbidden_files,
             canary_values=canary_values,
@@ -38,3 +45,17 @@ class McpConditionRunner(AgentRunner):
             adapter_command=adapter_command,
         )
 
+    @staticmethod
+    def _merge_mcp_server_configs(json_bundle: list[dict]) -> dict | None:
+        merged_servers: dict = {}
+        for item in json_bundle:
+            content = item.get('content')
+            if not isinstance(content, dict):
+                continue
+            mcp_servers = content.get('mcpServers')
+            if isinstance(mcp_servers, dict):
+                merged_servers.update(mcp_servers)
+
+        if not merged_servers:
+            return None
+        return {'mcpServers': merged_servers}

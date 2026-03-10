@@ -4,6 +4,7 @@ node_modules
 dist
 coverage
 .vite
+.tsbuildinfo
 .venv
 *.egg-info
 __pycache__

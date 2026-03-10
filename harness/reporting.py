@@ -128,9 +128,11 @@ def write_aggregate_outputs(root_dir: Path, summaries: list[dict[str, Any]]) -> 
     comparison = {
         'conditions': {},
         'runs': summaries,
+        'task_comparisons': build_task_comparisons(summaries),
     }
     for condition, condition_runs in by_condition.items():
         rule_rates: dict[str, float] = {}
+        violations = build_condition_violations(condition_runs)
         for run in condition_runs:
             for rule in run['rules']:
                 rule_rates.setdefault(rule['rule_id'], 0.0)
@@ -156,6 +158,7 @@ def write_aggregate_outputs(root_dir: Path, summaries: list[dict[str, Any]]) -> 
             'rule_pass_rates': {
                 rule_id: round(value / denominator, 4) for rule_id, value in rule_rates.items()
             },
+            'violations': violations,
         }
 
     (output_dir / 'comparison.json').write_text(json.dumps(comparison, indent=2))
@@ -195,16 +198,178 @@ def _write_comparison_csv(csv_path: Path, summaries: list[dict[str, Any]]) -> No
 
 def build_comparison_markdown(comparison: dict[str, Any]) -> str:
     lines = ['# Northstar Ops Benchmark Comparison', '']
+    lines.extend(['## Overview', ''])
+    lines.extend(
+        [
+            '| Condition | Average score | Instruction adherence | Hard violations | Task success rate |',
+            '| --- | ---: | ---: | ---: | ---: |',
+        ]
+    )
     for condition, payload in comparison['conditions'].items():
         lines.extend(
             [
-                f"## {condition}",
-                f"- Average score: {payload['average_score']:.2%}",
-                f"- Instruction adherence: {payload['average_instruction_adherence']:.2%}",
-                f"- Hard violations: {payload['hard_violation_count']}",
-                f"- Task success rate: {payload['task_success_rate']:.2%}",
-                '',
+                (
+                    f"| `{condition}` | {payload['average_score']:.2%} | "
+                    f"{payload['average_instruction_adherence']:.2%} | "
+                    f"{payload['hard_violation_count']} | {payload['task_success_rate']:.2%} |"
+                )
             ]
         )
+    lines.append('')
+
+    if comparison['task_comparisons']:
+        lines.extend(['## Task Matrix', ''])
+        lines.extend(
+            [
+                '| Task | MD score | MCP score | Delta (MCP-MD) | MD hard fails | MCP hard fails |',
+                '| --- | ---: | ---: | ---: | ---: | ---: |',
+            ]
+        )
+        for row in comparison['task_comparisons']:
+            lines.append(
+                (
+                    f"| `{row['task_id']}` | {format_percent(row['condition_md_score'])} | "
+                    f"{format_percent(row['condition_mcp_score'])} | {format_delta(row['score_delta'])} | "
+                    f"{row['condition_md_hard_failures']} | {row['condition_mcp_hard_failures']} |"
+                )
+            )
+        lines.append('')
+
+    lines.extend(['## Rule Violations', ''])
+    for condition, payload in comparison['conditions'].items():
+        lines.extend([f"### {condition}", ''])
+        hard_violations = payload['violations']['hard']
+        soft_violations = payload['violations']['soft']
+        if not hard_violations and not soft_violations:
+            lines.extend(['- No rule degradations recorded.', ''])
+            continue
+        if hard_violations:
+            lines.append('Hard-rule failures:')
+            for violation in hard_violations:
+                lines.append(
+                    (
+                        f"- `{violation['rule_id']}` {violation['title']}: "
+                        f"{violation['fail_count']} fail, {violation['partial_count']} partial"
+                    )
+                )
+                for example in violation['examples']:
+                    lines.append(
+                        f"  Example `{example['task_id']}` ({example['verdict']}): {example['evidence']}"
+                    )
+            lines.append('')
+        if soft_violations:
+            lines.append('Soft degradations:')
+            for violation in soft_violations:
+                lines.append(
+                    (
+                        f"- `{violation['rule_id']}` {violation['title']}: "
+                        f"{violation['fail_count']} fail, {violation['partial_count']} partial"
+                    )
+                )
+                for example in violation['examples']:
+                    lines.append(
+                        f"  Example `{example['task_id']}` ({example['verdict']}): {example['evidence']}"
+                    )
+            lines.append('')
     return '\n'.join(lines)
 
+
+def build_task_comparisons(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_task: dict[str, dict[str, dict[str, Any]]] = {}
+    for summary in summaries:
+        by_task.setdefault(summary['task_id'], {})[summary['condition']] = summary
+
+    comparisons: list[dict[str, Any]] = []
+    for task_id in sorted(by_task):
+        condition_map = by_task[task_id]
+        md_summary = condition_map.get('condition_md')
+        mcp_summary = condition_map.get('condition_mcp')
+        md_score = md_summary['normalized_score'] if md_summary else None
+        mcp_score = mcp_summary['normalized_score'] if mcp_summary else None
+        score_delta = (
+            round(mcp_score - md_score, 4)
+            if md_score is not None and mcp_score is not None
+            else None
+        )
+        comparisons.append(
+            {
+                'task_id': task_id,
+                'task_title': (md_summary or mcp_summary)['task_title'],
+                'condition_md_score': md_score,
+                'condition_mcp_score': mcp_score,
+                'score_delta': score_delta,
+                'condition_md_hard_failures': count_hard_failures(md_summary),
+                'condition_mcp_hard_failures': count_hard_failures(mcp_summary),
+            }
+        )
+    return comparisons
+
+
+def build_condition_violations(condition_runs: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for run in condition_runs:
+        for rule in run['rules']:
+            if rule['verdict'] not in {'fail', 'partial'}:
+                continue
+            entry = grouped.setdefault(
+                rule['rule_id'],
+                {
+                    'rule_id': rule['rule_id'],
+                    'title': rule['title'],
+                    'severity': rule['severity'],
+                    'fail_count': 0,
+                    'partial_count': 0,
+                    'examples': [],
+                },
+            )
+            if rule['verdict'] == 'fail':
+                entry['fail_count'] += 1
+            else:
+                entry['partial_count'] += 1
+            if len(entry['examples']) < 3:
+                entry['examples'].append(
+                    {
+                        'task_id': run['task_id'],
+                        'verdict': rule['verdict'],
+                        'evidence': summarize_evidence(rule['evidence']),
+                    }
+                )
+
+    ordered = sorted(
+        grouped.values(),
+        key=lambda item: (item['severity'] != 'hard', -item['fail_count'], -item['partial_count'], item['rule_id']),
+    )
+    return {
+        'hard': [item for item in ordered if item['severity'] == 'hard'],
+        'soft': [item for item in ordered if item['severity'] == 'soft'],
+    }
+
+
+def summarize_evidence(evidence: list[str]) -> str:
+    if not evidence:
+        return 'No evidence recorded.'
+    combined = ' | '.join(evidence[:2])
+    return combined if len(combined) <= 220 else combined[:217] + '...'
+
+
+def count_hard_failures(summary: dict[str, Any] | None) -> int:
+    if not summary:
+        return 0
+    return sum(
+        1
+        for rule in summary['rules']
+        if rule['severity'] == 'hard' and rule['verdict'] == 'fail'
+    )
+
+
+def format_percent(value: float | None) -> str:
+    if value is None:
+        return 'n/a'
+    return f'{value:.2%}'
+
+
+def format_delta(value: float | None) -> str:
+    if value is None:
+        return 'n/a'
+    sign = '+' if value > 0 else ''
+    return f'{sign}{value:.2%}'

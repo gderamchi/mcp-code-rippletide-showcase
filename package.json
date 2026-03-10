@@ -10,7 +10,7 @@
     "web:typecheck": "pnpm --dir web typecheck",
     "web:test": "pnpm --dir web test --run",
     "benchmark:demo": "python3 -m harness.cli run-all --runner demo --conditions condition_md condition_mcp",
-    "benchmark:compare": "python3 -m harness.cli compare --runs-dir benchmark/reports/runs"
+    "benchmark:compare": "python3 -m harness.cli compare --runs-dir benchmark/reports/runs",
+    "benchmark:codex": "python3 -m harness.cli run-all --runner external --conditions condition_md condition_mcp --adapter-cmd \"python3 scripts/adapter_codex.py {request_file}\""
   }
 }
-

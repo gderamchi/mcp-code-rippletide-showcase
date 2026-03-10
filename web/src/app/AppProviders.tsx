@@ -1,4 +1,4 @@
-import { createContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AppSettings } from '../types/models';
 import { getSettings, subscribeSettings, updateSettings } from '../lib/api/settings';
 
@@ -13,12 +13,13 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 export function AppProviders({ children }: { children: ReactNode }): JSX.Element {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
 
     void getSettings().then((value) => {
-      if (mounted) {
+      if (mountedRef.current) {
         setSettings(value);
         setLoading(false);
       }
@@ -30,7 +31,7 @@ export function AppProviders({ children }: { children: ReactNode }): JSX.Element
     });
 
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       unsubscribe();
     };
   }, []);
@@ -42,6 +43,9 @@ export function AppProviders({ children }: { children: ReactNode }): JSX.Element
       async saveSettings(partial) {
         setLoading(true);
         const next = await updateSettings(partial);
+        if (!mountedRef.current) {
+          return;
+        }
         setSettings(next);
         setLoading(false);
       },

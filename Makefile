@@ -1,7 +1,7 @@
 PYTHON := python3
 VENV := .venv
 
-.PHONY: setup setup-python setup-node web-dev check benchmark-demo benchmark-compare clean
+.PHONY: setup setup-python setup-node web-dev check benchmark-demo benchmark-compare benchmark-codex clean
 
 setup: setup-node setup-python
 
@@ -28,6 +28,8 @@ benchmark-demo:
 benchmark-compare:
 	$(VENV)/bin/python -m harness.cli compare --runs-dir benchmark/reports/runs
 
+benchmark-codex:
+	$(VENV)/bin/python -m harness.cli run-all --runner external --conditions condition_md condition_mcp --adapter-cmd "python3 scripts/adapter_codex.py {request_file}"
+
 clean:
 	rm -rf $(VENV) web/dist web/coverage
-

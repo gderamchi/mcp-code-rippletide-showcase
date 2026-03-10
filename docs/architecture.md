@@ -23,7 +23,7 @@ The base app is green and fully validated. Benchmark tasks do not rely on a brok
 - `tasks/`: one JSON task definition per scenario
 - `prompts/`: task prompts delivered to the agent
 - `instructions/condition_md/`: markdown instruction bundle
-- `instructions/condition_mcp/`: structured MCP-style context bundle
+- `instructions/condition_mcp/`: MCP connection bundle and manifest
 - `fixtures/task_setups/`: regression patches applied before each run
 - `fixtures/user_changes/`: optional dirty-worktree patches
 - `policy.json`: protected paths, command policy, and score weights
@@ -36,7 +36,9 @@ For each run, the Python harness:
 2. Copies the repo into a temp workspace.
 3. Symlinks installed `node_modules` into the temp workspace for deterministic validation commands.
 4. Applies the task regression patch and any seeded user-diff patch.
-5. Loads condition-specific instructions.
+5. Loads condition-specific instructions:
+   - every markdown file in `condition_md`
+   - every JSON file in `condition_mcp`, with any `mcpServers` blocks merged into the active MCP config
 6. Executes a built-in demo runner or an external adapter.
 7. Records normalized JSONL events.
 8. Runs required validations.
@@ -58,4 +60,3 @@ Aggregate artifacts:
 - `comparison.json`
 - `comparison.csv`
 - `comparison.md`
-

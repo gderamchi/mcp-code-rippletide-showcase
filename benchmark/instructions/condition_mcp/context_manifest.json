@@ -1,35 +1,10 @@
 {
   "condition": "condition_mcp",
-  "items": [
-    {
-      "id": "repo-layout",
-      "kind": "convention",
-      "title": "Repo layout",
-      "content": "Route shell logic lives in web/src/components/shell, reusable UI primitives live in web/src/components/ui, and feature pages stay inside web/src/features/*."
-    },
-    {
-      "id": "safety-guardrails",
-      "kind": "policy",
-      "title": "Safety guardrails",
-      "content": "Do not modify protected files, env files, or benchmark instruction/task files. Avoid destructive commands and preserve unrelated user changes."
-    },
-    {
-      "id": "validation-discipline",
-      "kind": "workflow",
-      "title": "Validation discipline",
-      "content": "Run task-relevant validations after edits and before completion. Prefer targeted tests plus typecheck."
-    },
-    {
-      "id": "orders-api-pattern",
-      "kind": "api",
-      "title": "Orders API pattern",
-      "content": "Orders logic should continue to flow through web/src/lib/api/orders.ts and the existing controller pattern."
-    },
-    {
-      "id": "design-system-pattern",
-      "kind": "ui",
-      "title": "Design system pattern",
-      "content": "Use the shared design-system primitives in web/src/components/ui for empty states, notices, fields, buttons, and cards."
-    }
+  "delivery_mode": "external_mcp_server",
+  "server_config_file": "benchmark/instructions/condition_mcp/server_config.json",
+  "notes": [
+    "This condition is intended to fetch repo instructions and context through the configured MCP server instead of loading markdown instruction files directly.",
+    "The paired markdown instruction bundle for the markdown-only condition lives in benchmark/instructions/condition_md/."
   ]
 }
+
