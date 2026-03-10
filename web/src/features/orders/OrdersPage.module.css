@@ -1,0 +1,76 @@
+.page {
+  display: grid;
+  gap: 1rem;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.titleBlock {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+}
+
+.copy {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 0.85rem 0.55rem;
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+}
+
+.table th {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.exportPreview {
+  margin: 0;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(31, 36, 29, 0.06);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+}

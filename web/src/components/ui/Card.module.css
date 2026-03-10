@@ -1,0 +1,13 @@
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+  padding: 1.4rem;
+  backdrop-filter: blur(14px);
+}
+
+.muted {
+  background: var(--surface-muted);
+}
+

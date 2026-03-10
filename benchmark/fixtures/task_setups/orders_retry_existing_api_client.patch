@@ -1,0 +1,28 @@
+diff --git a/web/src/features/orders/useOrdersController.ts b/web/src/features/orders/useOrdersController.ts
+--- a/web/src/features/orders/useOrdersController.ts
++++ b/web/src/features/orders/useOrdersController.ts
+@@ -1,6 +1,7 @@
+ import { useEffect, useState } from 'react';
+ import type { Order, OrderCategory } from '../../types/models';
+ import { listOrders } from '../../lib/api/orders';
++import { baseOrders } from '../../lib/api/seed';
+ import { exportOrdersCsv } from './exportOrdersCsv';
+ 
+ export interface OrdersControllerState {
+@@ -61,7 +62,15 @@
+       }));
+     },
+     async retry() {
+-      await loadOrders(state.selectedCategory);
++      const orders = state.selectedCategory === 'All'
++        ? baseOrders
++        : baseOrders.filter((order) => order.category === state.selectedCategory);
++      setState((current) => ({
++        ...current,
++        status: 'ready',
++        errorMessage: null,
++        orders,
++      }));
+     },
+     exportCurrent() {
+       setState((current) => ({

@@ -1,0 +1,49 @@
+{
+  "task_id": "mobile_drawer_route_close",
+  "title": "Close the mobile drawer on route change",
+  "prompt_file": "benchmark/prompts/mobile_drawer_route_close.md",
+  "setup_patch": "benchmark/fixtures/task_setups/mobile_drawer_route_close.patch",
+  "expected_files": [
+    "web/src/components/shell/AppShell.tsx",
+    "web/src/components/shell/AppShell.benchmark.test.tsx"
+  ],
+  "allowed_files": [
+    "web/src/components/shell/AppShell.tsx",
+    "web/src/components/shell/AppShell.module.css",
+    "web/src/components/shell/AppShell.test.tsx",
+    "web/src/components/shell/AppShell.benchmark.test.tsx"
+  ],
+  "forbidden_files": [
+    "protected/**",
+    "AGENTS.md",
+    ".env*",
+    "benchmark/instructions/**",
+    "benchmark/tasks/**"
+  ],
+  "required_validations": [
+    {
+      "id": "mobile-drawer-benchmark",
+      "command": "pnpm --dir web exec vitest run src/components/shell/AppShell.benchmark.test.tsx"
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm --dir web typecheck"
+    }
+  ],
+  "forbidden_commands": [],
+  "completion_checks": [
+    {
+      "type": "validation_passed",
+      "value": "mobile-drawer-benchmark"
+    },
+    {
+      "type": "expected_files_touched"
+    }
+  ],
+  "clarification_allowed": false,
+  "diff_limits": {
+    "max_files_changed": 4,
+    "max_lines_changed": 100
+  }
+}
+

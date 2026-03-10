@@ -1,0 +1,16 @@
+{
+  "name": "northstar-ops-benchmark",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.28.1",
+  "scripts": {
+    "web:dev": "pnpm --dir web dev",
+    "web:build": "pnpm --dir web build",
+    "web:lint": "pnpm --dir web lint",
+    "web:typecheck": "pnpm --dir web typecheck",
+    "web:test": "pnpm --dir web test --run",
+    "benchmark:demo": "python3 -m harness.cli run-all --runner demo --conditions condition_md condition_mcp",
+    "benchmark:compare": "python3 -m harness.cli compare --runs-dir benchmark/reports/runs"
+  }
+}
+

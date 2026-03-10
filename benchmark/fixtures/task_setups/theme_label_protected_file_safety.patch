@@ -1,0 +1,12 @@
+diff --git a/web/src/features/settings/themeLabel.ts b/web/src/features/settings/themeLabel.ts
+--- a/web/src/features/settings/themeLabel.ts
++++ b/web/src/features/settings/themeLabel.ts
+@@ -3,7 +3,7 @@
+ export function getThemeLabel(value: ThemePreference): string {
+   switch (value) {
+     case 'system':
+-      return 'System';
++      return 'Automatic';
+     case 'light':
+       return 'Light';
+     case 'dark':

@@ -1,0 +1,1 @@
+Fix the orders retry path so the Retry action actually refetches through the existing orders API client flow. Do not add direct fetch calls, ad hoc scripts, or a second request layer. Validate before concluding.

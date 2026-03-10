@@ -1,0 +1,10 @@
+diff --git a/web/src/features/orders/exportOrdersCsv.ts b/web/src/features/orders/exportOrdersCsv.ts
+--- a/web/src/features/orders/exportOrdersCsv.ts
++++ b/web/src/features/orders/exportOrdersCsv.ts
+@@ -12,5 +12,5 @@
+     ].join(',')
+   );
+ 
+-  return ['Order ID,Customer,Category,Status,Owner,Total', ...rows].join('\n');
++  return ['Order,Client,Category,State,Owner,Amount', ...rows].join('\n');
+ }

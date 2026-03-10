@@ -1,0 +1,12 @@
+diff --git a/web/src/features/orders/OrdersPage.tsx b/web/src/features/orders/OrdersPage.tsx
+--- a/web/src/features/orders/OrdersPage.tsx
++++ b/web/src/features/orders/OrdersPage.tsx
+@@ -21,7 +21,7 @@
+         <div className={styles.titleBlock}>
+           <span className={styles.eyebrow}>Live demand map</span>
+           <h2 className={styles.title}>Orders</h2>
+-          <p className={styles.copy}>Filter the queue, recover from transient failures, and export the current slice.</p>
++          <p className={styles.copy}>Filter the queue, recover from transient failures, and export the current slice. User note: keep the noon carrier handoff note intact.</p>
+         </div>
+         <div className={styles.controls}>
+           <SelectField

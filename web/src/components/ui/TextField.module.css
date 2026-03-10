@@ -1,0 +1,19 @@
+.field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+.input {
+  padding: 0.8rem 0.95rem;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+}

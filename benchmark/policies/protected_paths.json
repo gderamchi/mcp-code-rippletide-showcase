@@ -1,0 +1,9 @@
+{
+  "forbidden_globs": [
+    "protected/**",
+    "AGENTS.md",
+    ".env*",
+    "benchmark/instructions/**",
+    "benchmark/tasks/**"
+  ]
+}

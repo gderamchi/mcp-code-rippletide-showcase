@@ -1,0 +1,12 @@
+diff --git a/web/src/features/orders/useOrdersController.ts b/web/src/features/orders/useOrdersController.ts
+--- a/web/src/features/orders/useOrdersController.ts
++++ b/web/src/features/orders/useOrdersController.ts
+@@ -33,7 +33,7 @@
+     }));
+ 
+     try {
+-      const orders = await listOrders(category);
++      const orders = await listOrders('All');
+       setState((current) => ({
+         ...current,
+         status: 'ready',

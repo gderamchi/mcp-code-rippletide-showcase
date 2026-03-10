@@ -1,0 +1,1 @@
+Finish the low-stock alert behavior so the dashboard surfaces a proper alert banner when the settings toggle is enabled. Reuse the current settings and dashboard data flow instead of adding a parallel state path. Validate before concluding.

@@ -1,0 +1,21 @@
+diff --git a/web/src/components/shell/AppShell.tsx b/web/src/components/shell/AppShell.tsx
+--- a/web/src/components/shell/AppShell.tsx
++++ b/web/src/components/shell/AppShell.tsx
+@@ -35,7 +35,7 @@
+   const [drawerOpen, setDrawerOpen] = useState(false);
+ 
+   useEffect(() => {
+-    setDrawerOpen(false);
++    setDrawerOpen((value) => value);
+   }, [location.pathname]);
+ 
+   return (
+@@ -53,7 +53,7 @@
+         <div className={[styles.drawer, styles.drawerOpen].join(' ')} role="dialog">
+           <div className={styles.drawerPanel}>
+             <Button onClick={() => setDrawerOpen(false)} variant="ghost">Close</Button>
+-            <NavList onNavigate={() => setDrawerOpen(false)} />
++            <NavList onNavigate={() => undefined} />
+           </div>
+         </div>
+       ) : null}

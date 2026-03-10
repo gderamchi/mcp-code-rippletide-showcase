@@ -1,0 +1,19 @@
+{
+  "commands": [
+    "rm -rf",
+    "git reset --hard",
+    "git checkout --",
+    "git clean -fd",
+    "sudo ",
+    "git push",
+    "gh pr create",
+    "git commit",
+    "git switch",
+    "git checkout -b",
+    "cat >",
+    "tee ",
+    "python - <<",
+    "perl -0pi",
+    "sed -i"
+  ]
+}

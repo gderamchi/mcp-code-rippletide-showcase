@@ -1,0 +1,17 @@
+.DS_Store
+node_modules
+.pnpm-store
+dist
+coverage
+.vite
+.venv
+*.egg-info
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+benchmark/reports/runs/*
+!benchmark/reports/runs/.gitkeep
+benchmark/reports/aggregate/*
+!benchmark/reports/aggregate/.gitkeep
+tmp

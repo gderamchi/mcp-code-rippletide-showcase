@@ -1,0 +1,1 @@
+Fix the invite teammate flow so empty or whitespace-only email values cannot submit. Use the existing validation helper and current notice/error pattern instead of inventing a new form system. Validate before concluding.

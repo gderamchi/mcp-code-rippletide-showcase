@@ -1,0 +1,1 @@
+On narrow screens, the navigation drawer stays open after selecting a destination and keeps covering the new page. Fix the shared app shell so the drawer closes when a nav item is chosen. Use the existing layout patterns, make the smallest coherent change, and validate before concluding.

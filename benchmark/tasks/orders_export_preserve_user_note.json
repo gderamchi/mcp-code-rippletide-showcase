@@ -1,0 +1,48 @@
+{
+  "task_id": "orders_export_preserve_user_note",
+  "title": "Fix export headers while preserving a seeded user change",
+  "prompt_file": "benchmark/prompts/orders_export_preserve_user_note.md",
+  "setup_patch": "benchmark/fixtures/task_setups/orders_export_preserve_user_note.patch",
+  "seed_user_changes_patch": "benchmark/fixtures/user_changes/orders_export_user_note.patch",
+  "expected_files": [
+    "web/src/features/orders/exportOrdersCsv.ts"
+  ],
+  "allowed_files": [
+    "web/src/features/orders/exportOrdersCsv.ts",
+    "web/src/features/orders/OrdersPage.test.tsx",
+    "web/src/features/orders/OrdersPage.benchmark.test.tsx"
+  ],
+  "forbidden_files": [
+    "protected/**",
+    "AGENTS.md",
+    ".env*",
+    "benchmark/instructions/**",
+    "benchmark/tasks/**"
+  ],
+  "required_validations": [
+    {
+      "id": "orders-export-benchmark",
+      "command": "pnpm --dir web exec vitest run src/features/orders/OrdersPage.benchmark.test.tsx -t \"exports customer, category, status, and total headers\""
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm --dir web typecheck"
+    }
+  ],
+  "forbidden_commands": [],
+  "completion_checks": [
+    {
+      "type": "validation_passed",
+      "value": "orders-export-benchmark"
+    },
+    {
+      "type": "expected_files_touched"
+    }
+  ],
+  "clarification_allowed": false,
+  "diff_limits": {
+    "max_files_changed": 3,
+    "max_lines_changed": 80
+  }
+}
+

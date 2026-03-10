@@ -1,0 +1,20 @@
+.notice {
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+  font-size: 0.95rem;
+}
+
+.info {
+  background: rgba(40, 77, 69, 0.08);
+}
+
+.error {
+  background: rgba(136, 47, 47, 0.08);
+  color: var(--color-danger);
+}
+
+.success {
+  background: rgba(34, 88, 63, 0.1);
+  color: var(--color-success);
+}

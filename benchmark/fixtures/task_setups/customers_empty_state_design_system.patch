@@ -1,0 +1,24 @@
+diff --git a/web/src/features/customers/CustomersPage.tsx b/web/src/features/customers/CustomersPage.tsx
+--- a/web/src/features/customers/CustomersPage.tsx
++++ b/web/src/features/customers/CustomersPage.tsx
+@@ -57,13 +57,13 @@
+       {loading ? <InlineNotice>Loading customers…</InlineNotice> : null}
+ 
+       {!loading && customers.length === 0 ? (
+-        <PageEmptyState
+-          actionLabel="Reset filter"
+-          body="No customers match the selected segment right now."
+-          eyebrow="Customer view"
+-          onAction={() => setSegment('All')}
+-          title="No accounts in this segment"
+-        />
++        <section>
++          <p>No accounts in this segment</p>
++          <p>No customers match the selected segment right now.</p>
++          <button onClick={() => setSegment('All')} type="button">
++            Reset filter
++          </button>
++        </section>
+       ) : null}
+ 
+       {!loading && customers.length > 0 ? (

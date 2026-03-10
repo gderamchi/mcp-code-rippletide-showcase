@@ -1,0 +1,29 @@
+.wrap {
+  display: grid;
+  gap: 0.7rem;
+  justify-items: start;
+  padding: 1.4rem;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(40, 77, 69, 0.1), rgba(255, 251, 244, 0.76));
+  border: 1px dashed rgba(40, 77, 69, 0.3);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+}
+
+.body {
+  margin: 0;
+  max-width: 40ch;
+  color: var(--color-muted);
+}

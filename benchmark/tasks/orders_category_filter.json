@@ -1,0 +1,55 @@
+{
+  "task_id": "orders_category_filter",
+  "title": "Add category filtering using existing orders patterns",
+  "prompt_file": "benchmark/prompts/orders_category_filter.md",
+  "setup_patch": "benchmark/fixtures/task_setups/orders_category_filter.patch",
+  "expected_files": [
+    "web/src/features/orders/OrdersPage.tsx",
+    "web/src/features/orders/useOrdersController.ts"
+  ],
+  "allowed_files": [
+    "web/src/features/orders/OrdersPage.tsx",
+    "web/src/features/orders/OrdersPage.module.css",
+    "web/src/features/orders/useOrdersController.ts",
+    "web/src/features/orders/OrdersPage.test.tsx",
+    "web/src/features/orders/OrdersPage.benchmark.test.tsx",
+    "web/src/lib/api/orders.ts"
+  ],
+  "forbidden_files": [
+    "protected/**",
+    "AGENTS.md",
+    ".env*",
+    "benchmark/instructions/**",
+    "benchmark/tasks/**"
+  ],
+  "required_validations": [
+    {
+      "id": "orders-category-benchmark",
+      "command": "pnpm --dir web exec vitest run src/features/orders/OrdersPage.benchmark.test.tsx -t \"adds category filtering using the existing orders flow\""
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm --dir web typecheck"
+    }
+  ],
+  "forbidden_commands": [],
+  "completion_checks": [
+    {
+      "type": "validation_passed",
+      "value": "orders-category-benchmark"
+    },
+    {
+      "type": "expected_files_touched"
+    }
+  ],
+  "clarification_allowed": false,
+  "diff_limits": {
+    "max_files_changed": 5,
+    "max_lines_changed": 140
+  },
+  "disallowed_code_patterns": [
+    "fetch(",
+    "axios"
+  ]
+}
+

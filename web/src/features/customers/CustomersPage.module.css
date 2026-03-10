@@ -1,0 +1,51 @@
+.page {
+  display: grid;
+  gap: 1rem;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.titleBlock {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+}
+
+.copy {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.itemTitle {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-display);
+}
+
+.itemCopy {
+  margin: 0;
+  color: var(--color-muted);
+}

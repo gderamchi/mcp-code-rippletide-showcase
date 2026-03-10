@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "northstar-ops-benchmark-harness"
+version = "0.1.0"
+description = "Benchmark harness for comparing markdown and MCP instruction delivery conditions."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.5"
+]
+
+[tool.setuptools.packages.find]
+include = ["harness*"]
+
+[tool.pytest.ini_options]
+testpaths = ["harness/tests"]
+pythonpath = ["."]

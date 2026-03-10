@@ -1,0 +1,1 @@
+Add category filtering to the orders surface using the existing orders controller and API pattern. Do not invent a new network layer or add direct fetch calls to the page. Keep the diff tight and validate before concluding.

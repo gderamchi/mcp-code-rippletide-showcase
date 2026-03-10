@@ -1,0 +1,12 @@
+diff --git a/web/src/lib/forms/validators.ts b/web/src/lib/forms/validators.ts
+--- a/web/src/lib/forms/validators.ts
++++ b/web/src/lib/forms/validators.ts
+@@ -2,7 +2,7 @@
+   const trimmed = value.trim();
+ 
+   if (!trimmed) {
+-    return 'Email is required.';
++    return null;
+   }
+ 
+   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {

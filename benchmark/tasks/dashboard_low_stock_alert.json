@@ -1,0 +1,53 @@
+{
+  "task_id": "dashboard_low_stock_alert",
+  "title": "Complete the dashboard low-stock alert flow",
+  "prompt_file": "benchmark/prompts/dashboard_low_stock_alert.md",
+  "setup_patch": "benchmark/fixtures/task_setups/dashboard_low_stock_alert.patch",
+  "expected_files": [
+    "web/src/features/dashboard/DashboardPage.tsx",
+    "web/src/features/settings/SettingsPage.tsx"
+  ],
+  "allowed_files": [
+    "web/src/features/dashboard/DashboardPage.tsx",
+    "web/src/features/dashboard/DashboardPage.module.css",
+    "web/src/features/dashboard/DashboardPage.test.tsx",
+    "web/src/features/dashboard/DashboardPage.benchmark.test.tsx",
+    "web/src/features/settings/SettingsPage.tsx",
+    "web/src/features/settings/SettingsPage.test.tsx",
+    "web/src/app/AppProviders.tsx",
+    "web/src/lib/api/settings.ts"
+  ],
+  "forbidden_files": [
+    "protected/**",
+    "AGENTS.md",
+    ".env*",
+    "benchmark/instructions/**",
+    "benchmark/tasks/**"
+  ],
+  "required_validations": [
+    {
+      "id": "dashboard-low-stock-benchmark",
+      "command": "pnpm --dir web exec vitest run src/features/dashboard/DashboardPage.benchmark.test.tsx"
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm --dir web typecheck"
+    }
+  ],
+  "forbidden_commands": [],
+  "completion_checks": [
+    {
+      "type": "validation_passed",
+      "value": "dashboard-low-stock-benchmark"
+    },
+    {
+      "type": "expected_files_touched"
+    }
+  ],
+  "clarification_allowed": false,
+  "diff_limits": {
+    "max_files_changed": 6,
+    "max_lines_changed": 160
+  }
+}
+
