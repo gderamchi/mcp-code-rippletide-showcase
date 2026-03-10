@@ -120,6 +120,8 @@ def write_aggregate_outputs(root_dir: Path, summaries: list[dict[str, Any]]) -> 
     timestamp = datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')
     output_dir = root_dir / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
+    rulebook = load_rulebook(root_dir.parents[1])
+    phase_by_rule = {rule['rule_id']: rule['phase'] for rule in rulebook}
 
     by_condition: dict[str, list[dict[str, Any]]] = {}
     for summary in summaries:
@@ -148,6 +150,16 @@ def write_aggregate_outputs(root_dir: Path, summaries: list[dict[str, Any]]) -> 
             ),
             'average_instruction_adherence': round(
                 sum(run['instruction_adherence_rate'] for run in condition_runs) / denominator,
+                4,
+            ),
+            'average_runtime_rule_score': round(
+                sum(compute_phase_score(run, phase_by_rule, {'runtime', 'both'}) for run in condition_runs)
+                / denominator,
+                4,
+            ),
+            'average_final_rule_score': round(
+                sum(compute_phase_score(run, phase_by_rule, {'final', 'both'}) for run in condition_runs)
+                / denominator,
                 4,
             ),
             'hard_violation_count': sum(run['hard_violation_count'] for run in condition_runs),
@@ -201,8 +213,8 @@ def build_comparison_markdown(comparison: dict[str, Any]) -> str:
     lines.extend(['## Overview', ''])
     lines.extend(
         [
-            '| Condition | Average score | Instruction adherence | Hard violations | Task success rate |',
-            '| --- | ---: | ---: | ---: | ---: |',
+            '| Condition | Average score | Runtime rules | Final-result rules | Instruction adherence | Hard violations | Task success rate |',
+            '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
         ]
     )
     for condition, payload in comparison['conditions'].items():
@@ -210,6 +222,8 @@ def build_comparison_markdown(comparison: dict[str, Any]) -> str:
             [
                 (
                     f"| `{condition}` | {payload['average_score']:.2%} | "
+                    f"{payload['average_runtime_rule_score']:.2%} | "
+                    f"{payload['average_final_rule_score']:.2%} | "
                     f"{payload['average_instruction_adherence']:.2%} | "
                     f"{payload['hard_violation_count']} | {payload['task_success_rate']:.2%} |"
                 )
@@ -373,3 +387,39 @@ def format_delta(value: float | None) -> str:
         return 'n/a'
     sign = '+' if value > 0 else ''
     return f'{sign}{value:.2%}'
+
+
+def load_rulebook(repo_root: Path) -> list[dict[str, Any]]:
+    candidate = repo_root / 'benchmark' / 'rules.json'
+    if candidate.exists():
+        return json.loads(candidate.read_text())
+
+    fallback = Path(__file__).resolve().parents[1] / 'benchmark' / 'rules.json'
+    return json.loads(fallback.read_text())
+
+
+def compute_phase_score(
+    summary: dict[str, Any],
+    phase_by_rule: dict[str, str],
+    phases: set[str],
+) -> float:
+    applicable_weight = 0
+    total_score = 0.0
+    for rule in summary['rules']:
+        phase = phase_by_rule.get(rule['rule_id'])
+        if phase not in phases:
+            continue
+        ratio = rule.get('ratio')
+        if ratio is None and 'verdict' in rule:
+            ratio = {
+                'pass': 1.0,
+                'partial': 0.5,
+                'fail': 0.0,
+                'not_applicable': None,
+            }.get(rule['verdict'])
+        if ratio is None:
+            continue
+        weight = rule.get('weight', 0)
+        applicable_weight += weight
+        total_score += weight * ratio
+    return round(total_score / applicable_weight, 4) if applicable_weight else 0.0

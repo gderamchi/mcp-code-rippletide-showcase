@@ -10,7 +10,7 @@ from .models import RunResult, ScoringContext, ValidationResult
 from .observer import RunObserver
 from .reporting import load_run_summaries, write_aggregate_outputs, write_run_outputs
 from .runners import DemoExecutor, ExternalProcessRunner, McpConditionRunner, MdConditionRunner
-from .scoring import ScoringEngine, load_allowed_scripts
+from .scoring import ScoringEngine, load_allowed_scripts, load_rulebook
 from .task_loader import load_all_tasks, load_policy, load_task
 from .workspace import (
     build_changed_files,
@@ -140,7 +140,7 @@ def execute_run(
         user_change_paths=workspace.user_change_paths,
         canary_values=request.canary_values,
     )
-    scoring_engine = ScoringEngine(policy)
+    scoring_engine = ScoringEngine(policy, load_rulebook(repo_root))
     score_summary = scoring_engine.score(scoring_context)
     observer.record_event(
         'scoring_result',
@@ -223,4 +223,3 @@ def main() -> int:
 
 if __name__ == '__main__':
     raise SystemExit(main())
-

@@ -69,6 +69,8 @@ def test_reporting_writes_run_and_aggregate_outputs(tmp_path: Path) -> None:
     comparison_json = (aggregate_dir / 'comparison.json').read_text()
     assert '## Task Matrix' in comparison_markdown
     assert '## Rule Violations' in comparison_markdown
+    assert 'Runtime rules' in comparison_markdown
+    assert 'Final-result rules' in comparison_markdown
     assert '"task_comparisons"' in comparison_json
 
 

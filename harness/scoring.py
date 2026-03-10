@@ -15,9 +15,14 @@ def load_allowed_scripts(repo_root: Path) -> set[str]:
     return scripts
 
 
+def load_rulebook(repo_root: Path) -> list[dict]:
+    return json.loads((repo_root / 'benchmark' / 'rules.json').read_text())
+
+
 class ScoringEngine:
-    def __init__(self, policy: dict) -> None:
+    def __init__(self, policy: dict, rulebook: list[dict]) -> None:
         self.policy = policy
+        self.rulebook = rulebook
 
     def score(self, context: ScoringContext) -> ScoreSummary:
         rules = []
@@ -25,8 +30,10 @@ class ScoringEngine:
         total_score = 0.0
         hard_violation_count = 0
 
-        for rule_id, weight in self.policy['score_weights'].items():
-            severity = 'hard' if rule_id in self.policy['hard_rules'] else 'soft'
+        for rule in self.rulebook:
+            rule_id = rule['rule_id']
+            weight = rule['weight']
+            severity = rule['severity']
             result = RULE_DETECTORS[rule_id](context, weight, severity)
             rules.append(result)
             if result.verdict != 'not_applicable':
@@ -68,4 +75,3 @@ class ScoringEngine:
             task_success=task_success,
             rules=rules,
         )
-

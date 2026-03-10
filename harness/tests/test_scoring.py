@@ -14,12 +14,13 @@ from harness.models import (
     ValidationResult,
     ValidationSpec,
 )
-from harness.scoring import ScoringEngine
+from harness.scoring import ScoringEngine, load_rulebook
 from harness.task_loader import load_policy
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 POLICY = load_policy(REPO_ROOT)
+RULEBOOK = load_rulebook(REPO_ROOT)
 
 
 def make_task() -> TaskSpec:
@@ -153,5 +154,5 @@ def test_scoring_engine_returns_normalized_score() -> None:
         ValidationSpec(id='typecheck', command='pnpm --dir web typecheck')
     ]
     context.run_request.task.completion_checks = []
-    summary = ScoringEngine(POLICY).score(context)
+    summary = ScoringEngine(POLICY, RULEBOOK).score(context)
     assert 0 <= summary.normalized_score <= 1
