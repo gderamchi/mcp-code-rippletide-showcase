@@ -27,10 +27,13 @@ That installs the web dependencies with `pnpm`, creates `.venv`, and installs th
 
 ```bash
 make web-dev
+make studio
+make studio-server
 make check
 make benchmark-demo
 make benchmark-compare
 make benchmark-codex
+make benchmark-claude
 ```
 
 Equivalent direct commands:
@@ -39,10 +42,13 @@ Equivalent direct commands:
 pnpm --dir web lint
 pnpm --dir web typecheck
 pnpm --dir web test --run
+.venv/bin/python scripts/start_studio.py
+.venv/bin/python -m uvicorn harness.server.app:app --reload --port 8008
 .venv/bin/pytest harness/tests
 .venv/bin/python -m harness.cli run-all --runner demo --conditions condition_md condition_mcp
 .venv/bin/python -m harness.cli compare --runs-dir benchmark/reports/runs
 .venv/bin/python -m harness.cli run-all --runner external --conditions condition_md condition_mcp --adapter-cmd "python3 scripts/adapter_codex.py {request_file}"
+.venv/bin/python -m harness.cli run-all --runner external --conditions condition_md condition_mcp --adapter-cmd "python3 scripts/adapter_claude.py {request_file}"
 ```
 
 ## Benchmark Commands
@@ -117,3 +123,39 @@ These demo outputs are useful for validating the benchmark plumbing, not for mak
 - Keep the task specs, detectors, and reports unchanged.
 
 See [architecture](docs/architecture.md), [integration](docs/integration.md), [scoring](docs/scoring.md), and [adding tasks](docs/adding_tasks.md).
+
+## Dynamic Benchmark Studio
+
+The repository now ships a local studio for dynamic instruction/MCP benchmarking:
+
+```bash
+make setup
+make studio
+```
+
+Open the Vite app and navigate to `/studio`.
+
+The lowest-friction first run is now:
+
+1. `make setup`
+2. `make studio`
+3. open `http://localhost:5173/studio`
+4. leave the default `Included benchmark repo` target selected
+5. click `Launch benchmark`
+
+You do not need to paste a repo path for the included benchmark repository.
+
+The Studio flow lets you:
+
+- point the harness at a local repo path or zip archive,
+- upload `AGENTS.md` / `CLAUDE.md` / system prompt files,
+- paste or upload MCP JSON,
+- compile normalized instruction rules,
+- compare those rules against a canonical MCP manifest,
+- generate runnable synthetic benchmark tasks for supported repos,
+- execute the MD and MCP matrices in parallel,
+- export the full run bundle as a zip.
+
+External runs default to `Codex` in the Studio. The simplified launcher also exposes `Claude Code` when the `claude` CLI is installed and authenticated, plus a `Custom command` path for any adapter that speaks the benchmark NDJSON contract.
+
+If no supported `vitest`, `jest`, or `pytest` runner is detected in the target repo, the Studio still completes the instruction/MCP alignment flow and reports the repo as `alignment-only`.

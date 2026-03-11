@@ -5,6 +5,7 @@ import styles from './AppShell.module.css';
 
 const navItems = [
   { label: 'Dashboard', to: '/' },
+  { label: 'Studio', to: '/studio' },
   { label: 'Orders', to: '/orders' },
   { label: 'Customers', to: '/customers' },
   { label: 'Settings', to: '/settings' },

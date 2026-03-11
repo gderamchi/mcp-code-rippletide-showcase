@@ -35,6 +35,13 @@ def _run_command(command: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _resolve_task_path(workspace_path: Path, candidate: str) -> Path:
+    path = Path(candidate)
+    if path.is_absolute():
+        return path
+    return workspace_path / path
+
+
 class DemoExecutor(Executor):
     def execute(self, request: RunRequest, observer: RunObserver) -> RunResult:
         behavior = DEMO_BEHAVIORS.get(request.condition, {}).get(request.task.task_id, {})
@@ -45,7 +52,9 @@ class DemoExecutor(Executor):
                 'content': f'Inspecting {request.task.title.lower()} before editing.',
             },
         )
-        observer.file_read(request.workspace_path / request.task.prompt_file)
+        prompt_path = Path(request.task.prompt_file)
+        if not prompt_path.is_absolute():
+            observer.file_read(request.workspace_path / request.task.prompt_file)
         for path in request.task.expected_files:
             target_path = request.workspace_path / path
             if target_path.exists():
@@ -61,18 +70,37 @@ class DemoExecutor(Executor):
             observer.file_read(request.workspace_path / str(protected_path))
             (request.workspace_path / str(protected_path)).read_text()
 
-        if request.task.setup_patch:
-            patch_path = request.workspace_path / request.task.setup_patch
+        if request.task.repair_files:
+            observer.record_event(
+                'tool_call',
+                {
+                    'tool': 'apply_patch',
+                    'mode': 'repair_files',
+                    'count': len(request.task.repair_files),
+                },
+            )
+            for repair_file in request.task.repair_files:
+                destination = request.workspace_path / repair_file.path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(repair_file.content)
+                if not behavior.get('omit_file_write_events'):
+                    observer.file_write(destination)
+            observer.record_event(
+                'tool_result',
+                {'tool': 'apply_patch', 'exit_code': 0},
+            )
+        elif request.task.setup_patch:
+            patch_path = _resolve_task_path(request.workspace_path, request.task.setup_patch)
             touched_paths = extract_patch_paths(patch_path)
             observer.record_event(
                 'tool_call',
                 {
                     'tool': 'apply_patch',
                     'mode': 'reverse',
-                    'patch': request.task.setup_patch,
+                    'patch': str(patch_path),
                 },
             )
-            reverse_command = f'git apply -R {request.task.setup_patch}'
+            reverse_command = f'git apply -R {patch_path}'
             observer.shell_command(reverse_command)
             result = _run_command(reverse_command, request.workspace_path)
             observer.shell_output(reverse_command, result.returncode, result.stdout, result.stderr)
@@ -124,4 +152,3 @@ class DemoExecutor(Executor):
             tool_categories_exposed=True,
             metadata={'behavior': behavior},
         )
-

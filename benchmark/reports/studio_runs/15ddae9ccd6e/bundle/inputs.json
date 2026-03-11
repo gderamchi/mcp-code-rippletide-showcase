@@ -1,0 +1,9 @@
+{
+  "repo_path": "/Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase",
+  "runner_kind": "external",
+  "agent_backend": "claude",
+  "adapter_command": "python3 /Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase/scripts/adapter_claude.py {request_file}",
+  "instruction_files": [
+    "SYSTEM_PROMPT.md"
+  ]
+}

@@ -22,5 +22,7 @@ def load_all_tasks(repo_root: Path) -> list[TaskSpec]:
 
 
 def read_prompt(repo_root: Path, task: TaskSpec) -> str:
-    return (repo_root / task.prompt_file).read_text()
-
+    prompt_path = Path(task.prompt_file)
+    if not prompt_path.is_absolute():
+        prompt_path = repo_root / prompt_path
+    return prompt_path.read_text()

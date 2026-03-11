@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .logging import EventLogger
@@ -180,6 +181,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=['condition_md', 'condition_mcp'],
         choices=['condition_md', 'condition_mcp'],
     )
+    run_all.add_argument('--max-workers', type=int, default=1)
 
     compare = subparsers.add_parser('compare')
     compare.add_argument('--runs-dir', required=True)
@@ -202,15 +204,36 @@ def main() -> int:
         return 0
 
     if args.command == 'run-all':
-        for task in load_all_tasks(repo_root):
-            for condition in args.conditions:
+        task_pairs = [
+            (task.task_id, condition)
+            for task in load_all_tasks(repo_root)
+            for condition in args.conditions
+        ]
+        if args.max_workers <= 1:
+            for task_id, condition in task_pairs:
                 execute_run(
                     repo_root=repo_root,
-                    task_id=task.task_id,
+                    task_id=task_id,
                     condition=condition,
                     runner_kind=args.runner,
                     adapter_command=args.adapter_cmd,
                 )
+            return 0
+
+        with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+            futures = [
+                executor.submit(
+                    execute_run,
+                    repo_root=repo_root,
+                    task_id=task_id,
+                    condition=condition,
+                    runner_kind=args.runner,
+                    adapter_command=args.adapter_cmd,
+                )
+                for task_id, condition in task_pairs
+            ]
+            for future in as_completed(futures):
+                future.result()
         return 0
 
     if args.command == 'compare':

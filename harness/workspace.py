@@ -36,7 +36,10 @@ def snapshot_tree(root: Path) -> dict[str, str]:
         if not path.is_file():
             continue
         relative_path = path.relative_to(root)
-        if any(part in {'.git', 'node_modules', '.venv', '__pycache__'} for part in relative_path.parts):
+        if any(
+            part in {'.git', 'node_modules', '.venv', '__pycache__', '.pytest_cache', 'coverage', 'dist'}
+            for part in relative_path.parts
+        ):
             continue
         try:
             snapshot[str(relative_path)] = path.read_text()
@@ -85,12 +88,31 @@ def extract_patch_paths(patch_path: Path) -> list[str]:
     return paths
 
 
-def create_workspace(repo_root: Path, task: TaskSpec) -> WorkspaceContext:
+def _resolve_task_path(root: Path, candidate: str | None) -> Path | None:
+    if not candidate:
+        return None
+    path = Path(candidate)
+    if path.is_absolute():
+        return path
+    return root / path
+
+
+def _write_workspace_files(workspace_root: Path, files) -> list[str]:
+    written_paths: list[str] = []
+    for item in files:
+        destination = workspace_root / item.path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(item.content)
+        written_paths.append(item.path)
+    return written_paths
+
+
+def create_workspace(source_root: Path, task: TaskSpec) -> WorkspaceContext:
     temp_dir = Path(tempfile.mkdtemp(prefix=f'northstar-{task.task_id}-'))
-    workspace_root = temp_dir / repo_root.name
-    shutil.copytree(repo_root, workspace_root, ignore=COPY_IGNORE)
-    _link_dependency_tree(repo_root / 'node_modules', workspace_root / 'node_modules')
-    _link_dependency_tree(repo_root / 'web' / 'node_modules', workspace_root / 'web' / 'node_modules')
+    workspace_root = temp_dir / source_root.name
+    shutil.copytree(source_root, workspace_root, ignore=COPY_IGNORE)
+    _link_dependency_tree(source_root / 'node_modules', workspace_root / 'node_modules')
+    _link_dependency_tree(source_root / 'web' / 'node_modules', workspace_root / 'web' / 'node_modules')
 
     _run(['git', 'init', '-q'], workspace_root)
     _run(['git', 'config', 'user.name', 'Northstar Harness'], workspace_root)
@@ -98,20 +120,32 @@ def create_workspace(repo_root: Path, task: TaskSpec) -> WorkspaceContext:
     _run(['git', 'add', '.'], workspace_root)
     _run(['git', 'commit', '-q', '-m', 'baseline'], workspace_root)
 
+    if task.setup_files:
+        _write_workspace_files(workspace_root, task.setup_files)
+        _run(['git', 'add', '.'], workspace_root)
+        _run(['git', 'commit', '-q', '-m', f'seed-files-{task.task_id}'], workspace_root)
+
     if task.setup_patch:
-        _run(['git', 'apply', task.setup_patch], workspace_root)
+        patch_path = _resolve_task_path(source_root, task.setup_patch)
+        assert patch_path is not None
+        _run(['git', 'apply', str(patch_path)], workspace_root)
         _run(['git', 'add', '.'], workspace_root)
         _run(['git', 'commit', '-q', '-m', f'seed-{task.task_id}'], workspace_root)
 
     user_change_paths: list[str] = []
+    if task.seed_user_files:
+        user_change_paths.extend(_write_workspace_files(workspace_root, task.seed_user_files))
+
     if task.seed_user_changes_patch:
-        _run(['git', 'apply', task.seed_user_changes_patch], workspace_root)
-        user_change_paths = extract_patch_paths(workspace_root / task.seed_user_changes_patch)
+        patch_path = _resolve_task_path(source_root, task.seed_user_changes_patch)
+        assert patch_path is not None
+        _run(['git', 'apply', str(patch_path)], workspace_root)
+        user_change_paths.extend(extract_patch_paths(patch_path))
 
     return WorkspaceContext(
         root=workspace_root,
         task_start_snapshot=snapshot_tree(workspace_root),
-        user_change_paths=user_change_paths,
+        user_change_paths=sorted(set(user_change_paths)),
         temp_dir=temp_dir,
     )
 

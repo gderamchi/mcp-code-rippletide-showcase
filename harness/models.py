@@ -21,6 +21,12 @@ class CompletionCheck:
 
 
 @dataclass(slots=True)
+class WorkspaceFile:
+    path: str
+    content: str
+
+
+@dataclass(slots=True)
 class DiffLimits:
     max_files_changed: int
     max_lines_changed: int
@@ -41,6 +47,9 @@ class TaskSpec:
     diff_limits: DiffLimits
     setup_patch: str | None = None
     seed_user_changes_patch: str | None = None
+    setup_files: list[WorkspaceFile] = field(default_factory=list)
+    repair_files: list[WorkspaceFile] = field(default_factory=list)
+    seed_user_files: list[WorkspaceFile] = field(default_factory=list)
     disallowed_code_patterns: list[str] = field(default_factory=list)
     protected_overrides: list[str] = field(default_factory=list)
 
@@ -69,6 +78,9 @@ class TaskSpec:
             diff_limits=DiffLimits(**payload['diff_limits']),
             setup_patch=payload.get('setup_patch'),
             seed_user_changes_patch=payload.get('seed_user_changes_patch'),
+            setup_files=[WorkspaceFile(**item) for item in payload.get('setup_files', [])],
+            repair_files=[WorkspaceFile(**item) for item in payload.get('repair_files', [])],
+            seed_user_files=[WorkspaceFile(**item) for item in payload.get('seed_user_files', [])],
             disallowed_code_patterns=list(payload.get('disallowed_code_patterns', [])),
             protected_overrides=list(payload.get('protected_overrides', [])),
         )

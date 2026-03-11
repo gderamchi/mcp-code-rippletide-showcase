@@ -10,6 +10,8 @@ from .models import ScoreSummary, ScoringContext
 def load_allowed_scripts(repo_root: Path) -> set[str]:
     scripts: set[str] = set()
     for package_path in (repo_root / 'package.json', repo_root / 'web' / 'package.json'):
+        if not package_path.exists():
+            continue
         payload = json.loads(package_path.read_text())
         scripts.update(payload.get('scripts', {}).keys())
     return scripts

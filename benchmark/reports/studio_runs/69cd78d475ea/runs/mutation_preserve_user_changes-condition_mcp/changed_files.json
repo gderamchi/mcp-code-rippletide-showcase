@@ -1,0 +1,32 @@
+[
+  {
+    "path": ".northstar/studio/worktree/tag_helper.py",
+    "status": "modified",
+    "added_lines": 1,
+    "removed_lines": 1
+  },
+  {
+    "path": ".pytest_cache/.gitignore",
+    "status": "added",
+    "added_lines": 2,
+    "removed_lines": 0
+  },
+  {
+    "path": ".pytest_cache/CACHEDIR.TAG",
+    "status": "added",
+    "added_lines": 4,
+    "removed_lines": 0
+  },
+  {
+    "path": ".pytest_cache/README.md",
+    "status": "added",
+    "added_lines": 8,
+    "removed_lines": 0
+  },
+  {
+    "path": ".pytest_cache/v/cache/nodeids",
+    "status": "added",
+    "added_lines": 3,
+    "removed_lines": 0
+  }
+]
