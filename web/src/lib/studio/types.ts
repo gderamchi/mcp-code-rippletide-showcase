@@ -13,6 +13,59 @@ export interface CreateStudioRunInput {
   maxWorkers: number;
 }
 
+export interface BenchmarkRuleCoverageItem {
+  rule_id: string;
+  source_rule_id: string;
+  category: string;
+  severity: string;
+  benchmarkable: boolean;
+  benchmark_family?: string | null;
+  normalized_claim: string;
+  raw_text: string;
+  source_file: string;
+  non_benchmarkable_reason: string;
+  coverage: {
+    status: 'covered' | 'missing' | 'ambiguous' | 'not_applicable';
+    evidence_source: 'manifest' | 'live_mcp' | 'both' | 'none';
+    explanation: string;
+  };
+}
+
+export interface BenchmarkPrecheckResponse {
+  profile_id?: string | null;
+  profile_name?: string | null;
+  source_root: string;
+  runner_kind: string;
+  agent_backend: string;
+  instruction_sources: Array<{
+    type: string;
+    origin: string;
+    label: string;
+  }>;
+  mcp_source_type: string;
+  mcp_source_origin?: string | null;
+  capabilities: {
+    language: string | null;
+    test_runner: string | null;
+    supported: boolean;
+    support_reason: string;
+  };
+  precheck: {
+    total_rules: number;
+    benchmarkable_rules: number;
+    excluded_rules: number;
+    covered_rules: number;
+    missing_rules: number;
+    ambiguous_rules: number;
+    requires_confirmation: boolean;
+    thresholds: {
+      missing_count: number;
+      missing_percent: number;
+    };
+    rules: BenchmarkRuleCoverageItem[];
+  };
+}
+
 export interface CreateStudioRunResponse {
   run_id: string;
   status: string;
@@ -46,8 +99,51 @@ export interface StudioRunSummary {
     supported: boolean;
     support_reason: string;
   };
-  generated_task_count?: number;
-  runnable_task_count?: number;
+  precheck?: BenchmarkPrecheckResponse['precheck'];
+  md_summary?: {
+    rule_count: number;
+    adherence_rate: number;
+    pass_count: number;
+    partial_count: number;
+    fail_count: number;
+  };
+  mcp_summary?: {
+    rule_count: number;
+    adherence_rate: number;
+    pass_count: number;
+    partial_count: number;
+    fail_count: number;
+  };
+  rule_comparisons?: Array<{
+    rule_id: string;
+    category: string;
+    md_verdict: 'pass' | 'partial' | 'fail' | 'not_applicable';
+    mcp_verdict: 'pass' | 'partial' | 'fail' | 'not_applicable';
+    delta: number;
+    md_result: {
+      verdict: string;
+      ratio: number;
+      evidence: string[];
+    };
+    mcp_result: {
+      verdict: string;
+      ratio: number;
+      evidence: string[];
+    };
+  }>;
+  category_comparisons?: Array<{
+    category: string;
+    md_rate: number;
+    mcp_rate: number;
+    delta: number;
+    rule_count: number;
+  }>;
+  violations?: {
+    md_only: string[];
+    mcp_only: string[];
+    shared: string[];
+  };
+  benchmark_runtime_ms?: number;
   benchmark?: {
     average_score: number;
     task_success_rate: number;

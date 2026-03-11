@@ -123,6 +123,7 @@ def resolve_instruction_sources(
     config_items: list[InstructionSourceConfig],
     *,
     benchmark_root: Path,
+    source_root: Path | None = None,
 ) -> tuple[list[PromptSource], list[dict[str, Any]]]:
     prompt_sources: list[PromptSource] = []
     metadata: list[dict[str, Any]] = []
@@ -132,7 +133,7 @@ def resolve_instruction_sources(
         if item.type == 'repo_file':
             if not item.path:
                 raise ValueError('Instruction source `repo_file` requires `path`.')
-            resolved_path = _resolve_path(item.path, benchmark_root, None)
+            resolved_path = _resolve_path(item.path, benchmark_root, source_root)
             repo_file_paths.append(resolved_path)
             metadata.append(
                 {

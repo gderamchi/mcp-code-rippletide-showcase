@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from .service import StudioRunManager
 
@@ -40,8 +40,44 @@ def create_app() -> FastAPI:
         agent_backend: str = Form(default='codex'),
         adapter_command: str | None = Form(default=None),
         max_workers: int = Form(default=4),
+        confirmed_to_continue: bool = Form(default=True),
     ) -> dict[str, str]:
-        state = manager.create_run(
+        try:
+            state = manager.create_benchmark_run(
+                profile_id=profile_id,
+                repo_path=repo_path,
+                repo_archive=repo_archive,
+                instruction_files=instruction_files or [],
+                mcp_json=mcp_json,
+                mcp_source_type=mcp_source_type,
+                mcp_source_path=mcp_source_path,
+                mcp_source_command=mcp_source_command,
+                runner_kind=runner_kind,
+                agent_backend=agent_backend,
+                adapter_command=adapter_command,
+                max_workers=max(1, min(max_workers, 16)),
+                confirmed_to_continue=confirmed_to_continue,
+            )
+        except ValueError as exc:
+            return JSONResponse(status_code=409, content=json.loads(str(exc)))
+        return {'run_id': state.run_id, 'status': state.status}
+
+    @app.post('/api/precheck')
+    async def create_precheck(
+        profile_id: str | None = Form(default=None),
+        repo_path: str | None = Form(default=None),
+        repo_archive: UploadFile | None = File(default=None),
+        instruction_files: list[UploadFile] | None = File(default=None),
+        mcp_json: str = Form(default='{}'),
+        mcp_source_type: str | None = Form(default=None),
+        mcp_source_path: str | None = Form(default=None),
+        mcp_source_command: str | None = Form(default=None),
+        runner_kind: str = Form(default='demo'),
+        agent_backend: str = Form(default='codex'),
+        adapter_command: str | None = Form(default=None),
+        max_workers: int = Form(default=4),
+    ) -> dict:
+        return manager.run_precheck(
             profile_id=profile_id,
             repo_path=repo_path,
             repo_archive=repo_archive,
@@ -55,6 +91,41 @@ def create_app() -> FastAPI:
             adapter_command=adapter_command,
             max_workers=max(1, min(max_workers, 16)),
         )
+
+    @app.post('/api/benchmark')
+    async def create_benchmark(
+        profile_id: str | None = Form(default=None),
+        repo_path: str | None = Form(default=None),
+        repo_archive: UploadFile | None = File(default=None),
+        instruction_files: list[UploadFile] | None = File(default=None),
+        mcp_json: str = Form(default='{}'),
+        mcp_source_type: str | None = Form(default=None),
+        mcp_source_path: str | None = Form(default=None),
+        mcp_source_command: str | None = Form(default=None),
+        runner_kind: str = Form(default='demo'),
+        agent_backend: str = Form(default='codex'),
+        adapter_command: str | None = Form(default=None),
+        max_workers: int = Form(default=4),
+        confirmed_to_continue: bool = Form(default=False),
+    ) -> dict[str, str]:
+        try:
+            state = manager.create_benchmark_run(
+                profile_id=profile_id,
+                repo_path=repo_path,
+                repo_archive=repo_archive,
+                instruction_files=instruction_files or [],
+                mcp_json=mcp_json,
+                mcp_source_type=mcp_source_type,
+                mcp_source_path=mcp_source_path,
+                mcp_source_command=mcp_source_command,
+                runner_kind=runner_kind,
+                agent_backend=agent_backend,
+                adapter_command=adapter_command,
+                max_workers=max(1, min(max_workers, 16)),
+                confirmed_to_continue=confirmed_to_continue,
+            )
+        except ValueError as exc:
+            return JSONResponse(status_code=409, content=json.loads(str(exc)))
         return {'run_id': state.run_id, 'status': state.status}
 
     @app.get('/api/agents')
@@ -80,20 +151,24 @@ def create_app() -> FastAPI:
         instruction_files: list[UploadFile] | None = File(default=None),
         adapter_command: str | None = Form(default=None),
     ) -> dict[str, str]:
-        state = manager.create_run(
-            profile_id=profile_id,
-            repo_path=repo_path,
-            repo_archive=repo_archive,
-            instruction_files=instruction_files or [],
-            mcp_json='{}',
-            mcp_source_type=None,
-            mcp_source_path=None,
-            mcp_source_command=None,
-            runner_kind='demo',
-            agent_backend='codex',
-            adapter_command=adapter_command,
-            max_workers=4,
-        )
+        try:
+            state = manager.create_benchmark_run(
+                profile_id=profile_id,
+                repo_path=repo_path,
+                repo_archive=repo_archive,
+                instruction_files=instruction_files or [],
+                mcp_json='{}',
+                mcp_source_type=None,
+                mcp_source_path=None,
+                mcp_source_command=None,
+                runner_kind='demo',
+                agent_backend='codex',
+                adapter_command=adapter_command,
+                max_workers=4,
+                confirmed_to_continue=True,
+            )
+        except ValueError as exc:
+            return JSONResponse(status_code=409, content=json.loads(str(exc)))
         return {'run_id': state.run_id, 'status': state.status}
 
     @app.get('/api/demo/anthropic')

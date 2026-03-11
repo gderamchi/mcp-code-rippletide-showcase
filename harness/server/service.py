@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 import threading
+import time
 import uuid
 import zipfile
 from dataclasses import dataclass, field
@@ -18,7 +20,6 @@ from ..engine import execute_task_matrix
 from ..logging import utc_now_iso
 from ..profiles import (
     BenchmarkProfile,
-    InstructionSourceConfig,
     McpSourceConfig,
     build_command_mcp_source,
     build_file_mcp_source,
@@ -31,7 +32,8 @@ from ..profiles import (
     resolve_instruction_sources,
     resolve_mcp_source,
 )
-from ..studio import build_dynamic_bundle, probe_repo_capabilities
+from ..rule_benchmark import build_precheck, compile_benchmark_rules, compile_rule_tasks, summarize_rule_benchmark
+from ..studio import probe_repo_capabilities
 from ..studio_models import DynamicRunBundle, studio_jsonable
 
 
@@ -142,6 +144,190 @@ class StudioRunManager:
         with self._lock:
             self._states[run_id] = state
         return state
+
+    def run_precheck(
+        self,
+        *,
+        profile_id: str | None,
+        repo_path: str | None,
+        repo_archive: UploadFile | None,
+        instruction_files: list[UploadFile],
+        mcp_json: str,
+        mcp_source_type: str | None,
+        mcp_source_path: str | None,
+        mcp_source_command: str | None,
+        runner_kind: str,
+        agent_backend: str,
+        adapter_command: str | None,
+        max_workers: int,
+    ) -> dict[str, Any]:
+        archive_blob, instruction_blobs = self._hydrate_uploads(repo_archive, instruction_files)
+        with tempfile.TemporaryDirectory(prefix='northstar-precheck-') as temp_root:
+            context = self._prepare_benchmark_context(
+                run_root=Path(temp_root),
+                profile_id=profile_id,
+                repo_path=repo_path,
+                repo_archive=archive_blob,
+                instruction_files=instruction_blobs,
+                mcp_json=mcp_json,
+                mcp_source_type=mcp_source_type,
+                mcp_source_path=mcp_source_path,
+                mcp_source_command=mcp_source_command,
+                runner_kind=runner_kind,
+                agent_backend=agent_backend,
+                adapter_command=adapter_command,
+                max_workers=max_workers,
+            )
+        return self._build_precheck_payload(context)
+
+    def create_benchmark_run(
+        self,
+        *,
+        profile_id: str | None,
+        repo_path: str | None,
+        repo_archive: UploadFile | None,
+        instruction_files: list[UploadFile],
+        mcp_json: str,
+        mcp_source_type: str | None,
+        mcp_source_path: str | None,
+        mcp_source_command: str | None,
+        runner_kind: str,
+        agent_backend: str,
+        adapter_command: str | None,
+        max_workers: int,
+        confirmed_to_continue: bool,
+    ) -> StudioRunState:
+        archive_blob, instruction_blobs = self._hydrate_uploads(repo_archive, instruction_files)
+        context = self._prepare_benchmark_context(
+            run_root=self.runs_root / uuid.uuid4().hex[:12],
+            profile_id=profile_id,
+            repo_path=repo_path,
+            repo_archive=archive_blob,
+            instruction_files=instruction_blobs,
+            mcp_json=mcp_json,
+            mcp_source_type=mcp_source_type,
+            mcp_source_path=mcp_source_path,
+            mcp_source_command=mcp_source_command,
+            runner_kind=runner_kind,
+            agent_backend=agent_backend,
+            adapter_command=adapter_command,
+            max_workers=max_workers,
+        )
+        if context['precheck'].requires_confirmation and not confirmed_to_continue:
+            raise ValueError(json.dumps(self._build_precheck_payload(context)))
+        return self._spawn_benchmark_run(context)
+
+    def _hydrate_uploads(
+        self,
+        repo_archive: UploadFile | None,
+        instruction_files: list[UploadFile],
+    ) -> tuple[UploadedBlob | None, list[UploadedBlob]]:
+        archive_blob = None
+        if repo_archive is not None:
+            archive_blob = UploadedBlob(
+                filename=repo_archive.filename or 'repository.zip',
+                content=repo_archive.file.read(),
+            )
+        instruction_blobs = [
+            UploadedBlob(
+                filename=upload.filename or f'instruction-{index}.md',
+                content=upload.file.read(),
+            )
+            for index, upload in enumerate(instruction_files, start=1)
+        ]
+        return archive_blob, instruction_blobs
+
+    def _prepare_benchmark_context(
+        self,
+        *,
+        run_root: Path,
+        profile_id: str | None,
+        repo_path: str | None,
+        repo_archive: UploadedBlob | None,
+        instruction_files: list[UploadedBlob],
+        mcp_json: str,
+        mcp_source_type: str | None,
+        mcp_source_path: str | None,
+        mcp_source_command: str | None,
+        runner_kind: str,
+        agent_backend: str,
+        adapter_command: str | None,
+        max_workers: int,
+    ) -> dict[str, Any]:
+        profile = load_profile(self.benchmark_root, profile_id) if profile_id else None
+        resolved_runner_kind, resolved_agent_backend = self._resolve_runtime(
+            profile, runner_kind, agent_backend
+        )
+        resolved_adapter_command = adapter_command
+        if resolved_runner_kind == 'external' and not resolved_adapter_command:
+            resolved_adapter_command = resolve_external_adapter_command(
+                benchmark_root=self.benchmark_root,
+                agent_backend=resolved_agent_backend,
+                adapter_command=adapter_command,
+            )
+
+        run_root.mkdir(parents=True, exist_ok=True)
+        source_root = self._resolve_source_root(
+            run_root,
+            repo_path,
+            repo_archive,
+            profile.default_repo_path if profile is not None else None,
+        )
+        prompt_sources, instruction_metadata = self._resolve_instruction_sources(
+            run_root,
+            source_root,
+            instruction_files,
+            profile,
+        )
+        compiled = InstructionCompiler().compile(prompt_sources, self.benchmark_root)
+        resolved_mcp_source = self._resolve_mcp_source(
+            profile=profile,
+            source_root=source_root,
+            mcp_json=mcp_json,
+            mcp_source_type=mcp_source_type,
+            mcp_source_path=mcp_source_path,
+            mcp_source_command=mcp_source_command,
+        )
+        manifest = McpManifestCompiler().compile(resolved_mcp_source.raw_config)
+        capabilities = probe_repo_capabilities(source_root)
+        benchmark_rules = compile_benchmark_rules(compiled)
+        live_source_config = None
+        if (profile is not None and profile.mcp_source.type == 'command') or mcp_source_type == 'command':
+            live_source_config = (
+                profile.mcp_source if profile is not None and mcp_source_type is None else
+                self._build_mcp_source_from_request(
+                    mcp_json=mcp_json,
+                    mcp_source_type='command',
+                    mcp_source_path=mcp_source_path,
+                    mcp_source_command=mcp_source_command,
+                )
+            )
+        precheck = build_precheck(
+            benchmark_rules=benchmark_rules,
+            manifest=manifest,
+            mcp_source=resolved_mcp_source,
+            live_mcp_source_config=live_source_config,
+            benchmark_root=self.benchmark_root,
+            source_root=source_root,
+        )
+        rule_tasks = compile_rule_tasks(run_root / 'bundle', benchmark_rules, capabilities)
+        return {
+            'run_root': run_root,
+            'profile': profile,
+            'source_root': source_root,
+            'compiled_instructions': compiled,
+            'instruction_metadata': instruction_metadata,
+            'resolved_mcp_source': resolved_mcp_source,
+            'manifest': manifest,
+            'capabilities': capabilities,
+            'benchmark_rules': benchmark_rules,
+            'precheck': precheck,
+            'rule_tasks': rule_tasks,
+            'runner_kind': resolved_runner_kind,
+            'agent_backend': resolved_agent_backend,
+            'adapter_command': resolved_adapter_command,
+            'max_workers': max_workers,
+        }
 
     def _run_job(
         self,
@@ -301,6 +487,172 @@ class StudioRunManager:
             self._append_event(state, 'run_failed', {'error': state.error})
             self._set_status(state, 'failed')
 
+    def _spawn_benchmark_run(self, context: dict[str, Any]) -> StudioRunState:
+        run_id = context['run_root'].name
+        state = StudioRunState(run_id=run_id, root=context['run_root'])
+        with self._lock:
+            self._states[run_id] = state
+        thread = threading.Thread(
+            target=self._run_prepared_job,
+            kwargs={
+                'state': state,
+                'context': context,
+            },
+            daemon=True,
+        )
+        thread.start()
+        self._write_state(state)
+        self._append_event(state, 'run_created', {'status': state.status})
+        return state
+
+    def _run_prepared_job(self, *, state: StudioRunState, context: dict[str, Any]) -> None:
+        try:
+            run_id = state.run_id
+            source_root = context['source_root']
+            run_root = context['run_root']
+            profile = context['profile']
+            compiled = context['compiled_instructions']
+            manifest = context['manifest']
+            capabilities = context['capabilities']
+            precheck = context['precheck']
+            rule_tasks = context['rule_tasks']
+            resolved_mcp_source = context['resolved_mcp_source']
+            runner_kind = context['runner_kind']
+            agent_backend = context['agent_backend']
+            adapter_command = context['adapter_command']
+            max_workers = context['max_workers']
+            instruction_metadata = context['instruction_metadata']
+
+            self._set_status(state, 'benchmark_running')
+            bundle = DynamicRunBundle(
+                bundle_root=run_root / 'bundle',
+                source_root=source_root,
+                inputs={
+                    'profile_id': profile.id if profile is not None else None,
+                    'profile_name': profile.name if profile is not None else None,
+                    'repo_path': str(source_root),
+                    'runner_kind': runner_kind,
+                    'agent_backend': agent_backend,
+                    'adapter_command': adapter_command,
+                    'instruction_sources': instruction_metadata,
+                    'mcp_source_type': resolved_mcp_source.type,
+                    'mcp_source_origin': resolved_mcp_source.provenance.get('origin'),
+                },
+                compiled_instructions=compiled,
+                mcp_manifest=manifest,
+                alignment_issues=[],
+                capabilities=capabilities,
+                generated_tasks=[],
+                benchmark_rules=precheck.rules,
+                precheck=precheck,
+                rule_tasks=rule_tasks,
+            )
+            self._append_event(
+                state,
+                'precheck_ready',
+                self._build_precheck_payload(context),
+            )
+
+            total_tasks = len(rule_tasks) * 2
+            counters = {
+                'total_tasks': total_tasks,
+                'completed_tasks': 0,
+                'completed_by_condition': {'condition_md': 0, 'condition_mcp': 0},
+            }
+            started_at = time.monotonic()
+            run_items = []
+            for rule_task in rule_tasks:
+                prompt_text = Path(rule_task.task.prompt_file).read_text()
+                md_payload = {
+                    'prompt': prompt_text,
+                    'instruction_bundle': [
+                        {'path': source.path, 'content': source.content}
+                        for source in compiled.sources
+                    ],
+                }
+                mcp_payload = {
+                    'prompt': prompt_text,
+                    'mcp_json_bundle': [{'path': 'resolved_mcp.json', 'content': manifest.raw_config}],
+                    'mcp_server_config': manifest.raw_config if manifest.raw_config.get('mcpServers') else None,
+                }
+                run_items.extend(
+                    [
+                        {
+                            'task': rule_task.task,
+                            'condition': 'condition_md',
+                            'instruction_payload': md_payload,
+                            'runner_kind': runner_kind,
+                            'adapter_command': adapter_command,
+                            'output_dir': run_root / 'runs' / f'{rule_task.task.task_id}-condition_md',
+                            'protected_globs': rule_task.task.forbidden_files,
+                            'allowed_scripts': set(capabilities.available_scripts),
+                        },
+                        {
+                            'task': rule_task.task,
+                            'condition': 'condition_mcp',
+                            'instruction_payload': mcp_payload,
+                            'runner_kind': runner_kind,
+                            'adapter_command': adapter_command,
+                            'output_dir': run_root / 'runs' / f'{rule_task.task.task_id}-condition_mcp',
+                            'protected_globs': rule_task.task.forbidden_files,
+                            'allowed_scripts': set(capabilities.available_scripts),
+                        },
+                    ]
+                )
+
+            def on_status(event_type: str, payload: dict[str, Any]) -> None:
+                if event_type == 'task_completed':
+                    counters['completed_tasks'] += 1
+                    counters['completed_by_condition'][payload['condition']] += 1
+                    elapsed = max(time.monotonic() - started_at, 0.001)
+                    avg_per_task = elapsed / counters['completed_tasks']
+                    remaining = total_tasks - counters['completed_tasks']
+                    payload = {
+                        **payload,
+                        'completed_tasks': counters['completed_tasks'],
+                        'total_tasks': total_tasks,
+                        'completed_by_condition': counters['completed_by_condition'],
+                        'estimated_remaining_seconds': round(avg_per_task * remaining, 1),
+                    }
+                self._append_event(state, event_type, payload)
+
+            summaries = execute_task_matrix(
+                benchmark_root=self.benchmark_root,
+                source_root=source_root,
+                run_items=run_items,
+                max_workers=max_workers,
+                on_status=on_status,
+            )
+            bundle.run_summaries = summaries
+            comparison_summary = summarize_rule_benchmark(
+                precheck=precheck,
+                rule_tasks=rule_tasks,
+                run_summaries=summaries,
+            )
+            comparison_summary['benchmark_runtime_ms'] = int((time.monotonic() - started_at) * 1000)
+            state.summary = {
+                'run_id': run_id,
+                'status': 'completed',
+                'source_root': str(source_root),
+                'inputs': bundle.inputs,
+                'capabilities': studio_jsonable(capabilities),
+                'runnable_task_count': len(rule_tasks),
+                'precheck': comparison_summary['precheck'],
+                'md_summary': comparison_summary['md_summary'],
+                'mcp_summary': comparison_summary['mcp_summary'],
+                'rule_comparisons': comparison_summary['rule_comparisons'],
+                'category_comparisons': comparison_summary['category_comparisons'],
+                'violations': comparison_summary['violations'],
+                'benchmark_runtime_ms': comparison_summary['benchmark_runtime_ms'],
+                'runs': summaries,
+            }
+            (run_root / 'summary.json').write_text(json.dumps(state.summary, indent=2))
+            self._set_status(state, 'completed')
+        except Exception as exc:  # pragma: no cover - exercised via integration tests
+            state.error = str(exc)
+            self._append_event(state, 'run_failed', {'error': state.error})
+            self._set_status(state, 'failed')
+
     def _resolve_source_root(
         self,
         run_root: Path,
@@ -381,7 +733,11 @@ class StudioRunManager:
             ]
 
         if profile is not None and profile.instruction_sources:
-            return resolve_instruction_sources(profile.instruction_sources, benchmark_root=self.benchmark_root)
+            return resolve_instruction_sources(
+                profile.instruction_sources,
+                benchmark_root=self.benchmark_root,
+                source_root=source_root,
+            )
 
         paths = self._materialize_instruction_files(run_root, source_root, [])
         return load_prompt_sources(paths), [
@@ -475,6 +831,58 @@ class StudioRunManager:
             }
         return summary
 
+    def _build_precheck_payload(self, context: dict[str, Any]) -> dict[str, Any]:
+        profile = context['profile']
+        precheck = context['precheck']
+        return {
+            'profile_id': profile.id if profile is not None else None,
+            'profile_name': profile.name if profile is not None else None,
+            'source_root': str(context['source_root']),
+            'runner_kind': context['runner_kind'],
+            'agent_backend': context['agent_backend'],
+            'instruction_sources': context['instruction_metadata'],
+            'mcp_source_type': context['resolved_mcp_source'].type,
+            'mcp_source_origin': context['resolved_mcp_source'].provenance.get('origin'),
+            'capabilities': studio_jsonable(context['capabilities']),
+            'precheck': {
+                'total_rules': precheck.total_rules,
+                'benchmarkable_rules': precheck.benchmarkable_rules,
+                'excluded_rules': precheck.excluded_rules,
+                'covered_rules': precheck.covered_rules,
+                'missing_rules': precheck.missing_rules,
+                'ambiguous_rules': precheck.ambiguous_rules,
+                'requires_confirmation': precheck.requires_confirmation,
+                'thresholds': {
+                    'missing_count': 5,
+                    'missing_percent': 0.1,
+                },
+                'rules': self._precheck_rules_payload(precheck),
+            },
+        }
+
+    def _precheck_rules_payload(self, precheck) -> list[dict[str, Any]]:
+        coverage_by_rule = {item.rule_id: item for item in precheck.coverage_results}
+        return [
+            {
+                'rule_id': rule.id,
+                'source_rule_id': rule.source_rule_id,
+                'category': rule.category,
+                'severity': rule.severity,
+                'benchmarkable': rule.benchmarkable,
+                'benchmark_family': rule.benchmark_family,
+                'normalized_claim': rule.normalized_claim,
+                'raw_text': rule.raw_text,
+                'source_file': rule.source_file,
+                'non_benchmarkable_reason': rule.non_benchmarkable_reason,
+                'coverage': {
+                    'status': coverage_by_rule[rule.id].status,
+                    'evidence_source': coverage_by_rule[rule.id].evidence_source,
+                    'explanation': coverage_by_rule[rule.id].explanation,
+                },
+            }
+            for rule in precheck.rules
+        ]
+
     def _group_alignment(self, issues) -> dict[str, int]:
         counts: dict[str, int] = {}
         for issue in issues:
@@ -545,10 +953,13 @@ class StudioRunManager:
             payload = json.loads(summary_path.read_text())
             inputs = payload.get('inputs') or {}
             benchmark = payload.get('benchmark') or {}
+            if 'average_score' in benchmark:
+                score = float(benchmark.get('average_score') or 0.0)
+            else:
+                score = float((payload.get('mcp_summary') or {}).get('adherence_rate') or 0.0)
             if payload.get('status') != 'completed':
                 continue
             if inputs.get('profile_id') == profile.id:
-                score = float(benchmark.get('average_score') or 0.0)
                 if score >= best_score:
                     best_score = score
                     best_summary = payload
@@ -557,7 +968,6 @@ class StudioRunManager:
                 continue
             if inputs.get('agent_backend') != expected_agent_backend:
                 continue
-            score = float(benchmark.get('average_score') or 0.0)
             if score >= best_score:
                 best_score = score
                 best_summary = payload

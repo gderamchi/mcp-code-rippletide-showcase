@@ -26,6 +26,19 @@ AlignmentStatus = Literal[
 ]
 AlignmentSeverity = Literal['info', 'warning', 'error']
 TaskOrigin = Literal['template', 'mutation']
+CoverageStatus = Literal['covered', 'missing', 'ambiguous', 'not_applicable']
+CoverageEvidenceSource = Literal['manifest', 'live_mcp', 'both', 'none']
+RuleBenchmarkFamily = Literal[
+    'validate_before_conclude',
+    'preserve_user_changes',
+    'instruction_safety',
+    'minimal_change',
+    'no_destructive_commands',
+    'proper_tool_usage',
+    'avoid_unnecessary_questions',
+    'branch_sandbox_discipline',
+    'no_hallucinated_repo_assumptions',
+]
 
 
 @dataclass(slots=True)
@@ -106,6 +119,73 @@ class RepoCapabilities:
 
 
 @dataclass(slots=True)
+class BenchmarkRule:
+    id: str
+    source_rule_id: str
+    category: RuleCategory
+    severity: RequirementLevel
+    benchmarkable: bool
+    normalized_claim: str
+    raw_text: str
+    source_file: str
+    benchmark_family: RuleBenchmarkFamily | None = None
+    non_benchmarkable_reason: str = ''
+
+
+@dataclass(slots=True)
+class RuleCoverageResult:
+    rule_id: str
+    status: CoverageStatus
+    evidence_source: CoverageEvidenceSource
+    explanation: str
+
+
+@dataclass(slots=True)
+class BenchmarkPrecheck:
+    total_rules: int
+    benchmarkable_rules: int
+    excluded_rules: int
+    covered_rules: int
+    missing_rules: int
+    ambiguous_rules: int
+    requires_confirmation: bool
+    rules: list[BenchmarkRule]
+    coverage_results: list[RuleCoverageResult]
+
+
+@dataclass(slots=True)
+class RuleBenchmarkTask:
+    rule_id: str
+    condition: str | None
+    prompt: str
+    detector_rule_id: str
+    seed: str
+    timeout_seconds: int
+    task: TaskSpec
+
+
+@dataclass(slots=True)
+class RuleBenchmarkResult:
+    rule_id: str
+    condition: str
+    verdict: Verdict
+    ratio: float
+    evidence: list[str]
+    duration_ms: int
+
+
+@dataclass(slots=True)
+class RuleComparison:
+    rule_id: str
+    category: RuleCategory
+    md_verdict: Verdict
+    mcp_verdict: Verdict
+    delta: float
+    md_result: RuleBenchmarkResult
+    mcp_result: RuleBenchmarkResult
+
+
+@dataclass(slots=True)
 class GeneratedTask:
     task_id: str
     origin: TaskOrigin
@@ -129,6 +209,9 @@ class DynamicRunBundle:
     alignment_issues: list[AlignmentIssue]
     capabilities: RepoCapabilities
     generated_tasks: list[GeneratedTask]
+    benchmark_rules: list[BenchmarkRule] = field(default_factory=list)
+    precheck: BenchmarkPrecheck | None = None
+    rule_tasks: list[RuleBenchmarkTask] = field(default_factory=list)
     run_summaries: list[dict[str, Any]] = field(default_factory=list)
     aggregate: dict[str, Any] = field(default_factory=dict)
 

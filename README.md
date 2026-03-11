@@ -1,161 +1,399 @@
 # Northstar Ops Benchmark Repository
 
-Northstar Ops is a compact benchmark repository for comparing coding-agent behavior under two instruction-delivery conditions:
+Northstar Ops is a local benchmark studio for comparing coding-agent behavior under two context-delivery modes:
 
-- `condition_md`: markdown/system-prompt style instruction injection
-- `condition_mcp`: structured MCP-style context injection
+- `condition_md`: rules delivered as Markdown / system-prompt context
+- `condition_mcp`: rules delivered through MCP context
 
-The comparison target is not general model quality. The benchmark is designed to surface instruction-following, repo awareness, validation discipline, safety behavior, and end-to-end completion.
+The benchmark target is rule adherence, not generic model quality. The Studio is built to answer:
 
-## Repository Layout
+- does the agent respect the rules better with `MD` or with `MCP`?
+- how many rules from the `.md` are actually represented in the MCP?
+- which rules fail only in `MD`, only in `MCP`, or in both?
 
-- `web/`: Vite + React + TypeScript dashboard app used as the coding target
-- `benchmark/`: task specs, prompts, condition bundles, fixtures, policy, and generated reports
-- `harness/`: Python orchestration, logging, scoring, reporting, and adapter interfaces
-- `protected/`: canary and instruction-safety files that normal tasks must not touch
-- `docs/`: architecture, task-authoring, scoring, and integration guidance
+## What This Repo Contains
+
+- `web/`: the Studio UI and the compact benchmark target app
+- `harness/`: Python orchestration, precheck, benchmark execution, scoring, adapters
+- `benchmark/`: task fixtures, policies, profiles, prompts, and reports
+- `scripts/`: thin wrappers for starting the Studio and external agent adapters
+- `protected/`: canary and protected files used by the benchmark
+- `docs/`: architecture and integration notes
+
+## Prerequisites
+
+You need these installed locally:
+
+- `python3` with venv support
+- `pnpm`
+- for real agent runs:
+  - `codex` if you want Codex runs
+  - `claude` if you want Claude Code runs
 
 ## Setup
 
+From the repo root:
+
 ```bash
 make setup
 ```
 
-That installs the web dependencies with `pnpm`, creates `.venv`, and installs the editable Python harness with `pytest`.
+This does all local bootstrap:
 
-## Common Commands
+- installs frontend dependencies with `pnpm`
+- creates `.venv`
+- installs the editable Python harness with dev dependencies
+
+## Fastest Way To Try The Project
 
 ```bash
-make web-dev
 make studio
+```
+
+Then open:
+
+- `http://localhost:5173/studio`
+
+This starts both:
+
+- the FastAPI backend on `http://127.0.0.1:8008`
+- the Vite frontend on `http://localhost:5173`
+
+If you prefer launching them separately:
+
+```bash
 make studio-server
-make check
+pnpm studio:web
+```
+
+## How To Use The Studio
+
+The Studio has two flows:
+
+### 1. Quick Start From Profile
+
+Use this for repeatable benchmarks.
+
+Steps:
+
+1. Open `/studio`
+2. Pick a saved profile such as `Anthropic demo` or `Quick demo`
+3. Click `Run precheck`
+4. Review the precheck:
+   - total rules
+   - covered by MCP
+   - missing from MCP
+   - ambiguous
+5. If coverage is acceptable, click `Launch benchmark`
+6. If coverage is too low, the Studio warns you before launch
+7. Review the final `MD vs MCP` comparison
+
+Profiles live in `benchmark/profiles/`.
+
+### 2. Custom One-Off Config
+
+Use this when you want to test a repo, `.md`, or MCP setup that is not yet saved as a profile.
+
+Steps:
+
+1. Choose the target:
+   - `Included benchmark repo`
+   - `Another local repo`
+2. Choose execution:
+   - `demo`
+   - `codex`
+   - `claude`
+   - `custom`
+3. Open `Instruction and MCP overrides`
+4. Optionally upload instruction files (`.md`, `.txt`)
+5. Choose MCP source type:
+   - `inline`
+   - `file`
+   - `command`
+6. Run precheck
+7. Launch benchmark
+
+## What The Benchmark Actually Does
+
+The benchmark now has two distinct stages.
+
+### Stage 1: Precheck
+
+The precheck is a diagnostic gate, not the benchmark itself.
+
+It does this:
+
+1. parses the `.md` rule set
+2. normalizes rules into canonical benchmark rules
+3. checks whether those rules are represented in the MCP
+4. reports:
+   - `covered`
+   - `missing`
+   - `ambiguous`
+   - `not_applicable`
+
+Coverage verification is hybrid:
+
+- manifest / JSON comparison first
+- live MCP verification only for unresolved or ambiguous rules
+
+The Studio asks for confirmation before launch if MCP coverage is too low:
+
+- more than `10%` of rules missing, or
+- more than `5` missing rules
+
+If you continue anyway, the MCP side is still benchmarked, but missing rules are expected to penalize it.
+
+### Stage 2: Benchmark
+
+This is the real comparison.
+
+The Studio:
+
+1. compiles one executable benchmark task per benchmarkable rule
+2. runs every task under `condition_md`
+3. runs the same tasks under `condition_mcp`
+4. runs the full matrix in parallel
+5. compares:
+   - `MD adherence`
+   - `MCP adherence`
+   - rule-by-rule diff
+   - category-level diff
+   - `md_only`, `mcp_only`, and shared violations
+
+The comparison axis is strictly `MD vs MCP` rule adherence.
+
+## MCP Source Types
+
+The Studio supports three MCP input modes.
+
+### `inline`
+
+Paste MCP JSON directly into the UI.
+
+Use this for:
+
+- quick experiments
+- debugging
+- temporary configurations
+
+### `file`
+
+Point the Studio at a JSON file.
+
+Use this for:
+
+- versioned benchmark setups
+- shared team configs
+- reproducible demos
+
+Example profile-backed MCP file:
+
+- `benchmark/profiles/mcp/rippletide.mcp.json`
+
+### `command`
+
+Provide a local command that prints valid MCP JSON to stdout.
+
+Use this when:
+
+- your MCP comes from another platform
+- you can export it via a script or CLI
+- you want to avoid copying JSON manually
+
+Example shape:
+
+```bash
+python3 scripts/export-mcp.py
+```
+
+The Studio consumes this output only. It does not attempt to write back to the external platform.
+
+## Profiles
+
+Profiles are versioned in:
+
+- `benchmark/profiles/`
+
+Current built-in examples:
+
+- `benchmark/profiles/anthropic-demo.json`
+- `benchmark/profiles/quick-demo.json`
+
+A profile contains:
+
+- target mode
+- execution preset
+- instruction sources
+- MCP source
+- worker count
+- tags / demo rank
+
+Profiles are the recommended way to run repeated benchmarks.
+
+## Built-In Agents
+
+The Studio can currently benchmark:
+
+- `Codex`
+- `Claude Code`
+- `Custom adapter command`
+
+The backend detects local availability and auth state via:
+
+- `GET /api/agents`
+
+## Running From The CLI
+
+### Start The Studio
+
+```bash
+make studio
+```
+
+or
+
+```bash
+pnpm studio:start
+```
+
+### Run The Legacy Demo Matrix
+
+```bash
 make benchmark-demo
-make benchmark-compare
+```
+
+### Run The Legacy External Matrix With Codex
+
+```bash
 make benchmark-codex
+```
+
+### Run The Legacy External Matrix With Claude Code
+
+```bash
 make benchmark-claude
 ```
 
-Equivalent direct commands:
-
-```bash
-pnpm --dir web lint
-pnpm --dir web typecheck
-pnpm --dir web test --run
-.venv/bin/python scripts/start_studio.py
-.venv/bin/python -m uvicorn harness.server.app:app --reload --port 8008
-.venv/bin/pytest harness/tests
-.venv/bin/python -m harness.cli run-all --runner demo --conditions condition_md condition_mcp
-.venv/bin/python -m harness.cli compare --runs-dir benchmark/reports/runs
-.venv/bin/python -m harness.cli run-all --runner external --conditions condition_md condition_mcp --adapter-cmd "python3 scripts/adapter_codex.py {request_file}"
-.venv/bin/python -m harness.cli run-all --runner external --conditions condition_md condition_mcp --adapter-cmd "python3 scripts/adapter_claude.py {request_file}"
-```
-
-## Benchmark Commands
-
-Run one task:
-
-```bash
-.venv/bin/python -m harness.cli run-task \
-  --task mobile_drawer_route_close \
-  --condition condition_mcp \
-  --runner demo
-```
-
-Run the full demo matrix:
-
-```bash
-make benchmark-demo
-```
-
-Compare generated runs:
+### Compare Legacy Benchmark Reports
 
 ```bash
 make benchmark-compare
 ```
 
-Run the real Codex CLI benchmark:
+### Full Repo Validation
 
 ```bash
-codex login
-make benchmark-codex
+make check
 ```
 
-## Output Locations
+## Outputs
 
-- Per-run artifacts: `benchmark/reports/runs/<task_id>-<condition>/`
-- Aggregate comparison artifacts: `benchmark/reports/aggregate/<timestamp>/`
-- Raw event log: `events.jsonl`
-- Machine-readable summary: `summary.json`
-- Human-readable report: `report.md`, `report.html`
-- Aggregate comparison: `comparison.json`, `comparison.csv`, `comparison.md`
+### Legacy benchmark outputs
 
-## What Ships In The App
+- per-run: `benchmark/reports/runs/<task_id>-<condition>/`
+- aggregate: `benchmark/reports/aggregate/<timestamp>/`
 
-The product app is intentionally realistic but compact:
+### Studio outputs
 
-- shell navigation in `web/src/components/shell/`
-- feature pages in `web/src/features/{dashboard,orders,customers,settings}/`
-- reusable design-system primitives in `web/src/components/ui/`
-- internal API and mock data under `web/src/lib/api/`
-- shared validation in `web/src/lib/forms/`
-- colocated `*.test.tsx` files plus `*.benchmark.test.tsx` task validators
+- run folders: `benchmark/reports/studio_runs/<run_id>/`
+- exports: `benchmark/reports/studio_runs/<run_id>-export.zip`
 
-The source tree stays green. Each benchmark task applies a regression patch in a temp workspace, then the harness runs the selected condition against that seeded breakage. The task suite now includes 24 auto-checkable scenarios spanning shell behavior, customers, dashboard, orders, settings, protected-file safety, and dirty-worktree preservation.
+Each Studio run may contain:
 
-## Current Demo Behavior
+- `state.json`
+- `summary.json`
+- `studio_events.jsonl`
+- `bundle/`
+- per-task run folders under `runs/`
 
-The built-in demo adapters are synthetic on purpose:
+## How To Read The Result
 
-- `condition_mcp` performs the clean reverse-fix path and validates before concluding.
-- `condition_md` intentionally includes a few softer and harder mistakes on selected tasks so the scoring/reporting pipeline produces a visible comparison.
+For a successful benchmark run, focus on:
 
-These demo outputs are useful for validating the benchmark plumbing, not for making product claims.
+- `precheck.missing_rules`
+- `md_summary.adherence_rate`
+- `mcp_summary.adherence_rate`
+- `rule_comparisons`
+- `category_comparisons`
+- `violations`
 
-## Next Steps For Real Integrations
+Interpretation:
 
-- The markdown condition reads every `.md` file present in [benchmark/instructions/condition_md](/Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase/benchmark/instructions/condition_md).
-- The MCP condition reads every `.json` file present in [benchmark/instructions/condition_mcp](/Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase/benchmark/instructions/condition_mcp) and automatically enables any JSON object that contains a top-level `mcpServers` block.
-- The real Codex adapter lives in [adapter_codex.py](/Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase/scripts/adapter_codex.py) and is invoked by `make benchmark-codex`.
-- The Codex adapter adds a benchmark wrapper that tells Codex to inspect the actual repo and prefer observed repo state if the injected context conflicts with the benchmark repo.
-- Plug a real markdown/system-prompt runtime into the external adapter boundary while keeping `MdConditionRunner`.
-- Plug a real MCP runtime/context provider into the same external adapter boundary while keeping `McpConditionRunner`.
-- Keep the task specs, detectors, and reports unchanged.
+- if `MCP` adherence is higher than `MD`, MCP is helping the agent respect the rules better
+- if `MD` and `MCP` are close, the delivery method is not materially changing behavior
+- if many rules are missing from MCP during precheck, the comparison is weakened and should be treated carefully
 
-See [architecture](docs/architecture.md), [integration](docs/integration.md), [scoring](docs/scoring.md), and [adding tasks](docs/adding_tasks.md).
+## Realistic Limitations
 
-## Dynamic Benchmark Studio
+The Studio does not benchmark every possible repo perfectly.
 
-The repository now ships a local studio for dynamic instruction/MCP benchmarking:
+It runs best when the target repo has a detectable test runner:
+
+- `vitest`
+- `jest`
+- `pytest`
+
+If no supported runner is found, the Studio can still complete precheck and MCP coverage diagnostics, but the execution path becomes limited.
+
+The benchmark is currently strongest on operational and behavioral rules such as:
+
+- validation discipline
+- user-change preservation
+- protected file safety
+- tool usage discipline
+- destructive command avoidance
+
+It is less suitable than a hardcoded domain-specific suite for extremely product-specific regressions.
+
+## Troubleshooting
+
+### The backend does not start
+
+Use:
 
 ```bash
 make setup
-make studio
+make studio-server
 ```
 
-Open the Vite app and navigate to `/studio`.
+If that works, prefer `make studio` afterward so backend and frontend start together from the repo-managed environment.
 
-The lowest-friction first run is now:
+### Codex or Claude Code is not available
 
-1. `make setup`
-2. `make studio`
-3. open `http://localhost:5173/studio`
-4. leave the default `Included benchmark repo` target selected
-5. click `Launch benchmark`
+Check:
 
-You do not need to paste a repo path for the included benchmark repository.
+- `GET /api/agents`
+- the Studio UI availability badges
 
-The Studio flow lets you:
+You need the relevant CLI installed and authenticated locally.
 
-- point the harness at a local repo path or zip archive,
-- upload `AGENTS.md` / `CLAUDE.md` / system prompt files,
-- paste or upload MCP JSON,
-- compile normalized instruction rules,
-- compare those rules against a canonical MCP manifest,
-- generate runnable synthetic benchmark tasks for supported repos,
-- execute the MD and MCP matrices in parallel,
-- export the full run bundle as a zip.
+### The MCP coverage is low
 
-External runs default to `Codex` in the Studio. The simplified launcher also exposes `Claude Code` when the `claude` CLI is installed and authenticated, plus a `Custom command` path for any adapter that speaks the benchmark NDJSON contract.
+This usually means one of:
 
-If no supported `vitest`, `jest`, or `pytest` runner is detected in the target repo, the Studio still completes the instruction/MCP alignment flow and reports the repo as `alignment-only`.
+- the MCP source is incomplete
+- the `.md` has rules not represented in MCP
+- the MCP export command returned stale or partial data
+
+In that case:
+
+1. fix the MCP source if possible
+2. rerun precheck
+3. only continue to benchmark if the warning is acceptable for your use case
+
+## Useful Files
+
+- architecture: `docs/architecture.md`
+- integration details: `docs/integration.md`
+- scoring: `docs/scoring.md`
+- adding tasks: `docs/adding_tasks.md`
+- scripts overview: `scripts/README.md`
+
+## Recommended Workflow For Teams
+
+1. put recurring setups into `benchmark/profiles/`
+2. prefer MCP `file` or `command` over `inline` for serious runs
+3. use the Studio precheck before every benchmark
+4. export the run bundle when sharing results
+5. compare `MD` vs `MCP` on rule adherence, not only task success

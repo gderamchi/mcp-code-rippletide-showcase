@@ -32,7 +32,7 @@ function buildAgentCatalog() {
         available: true,
         authenticated: true,
         default_for_external: true,
-        command_preview: 'python3 scripts/adapter_codex.py {request_file}',
+        command_preview: null,
         auth_message: 'Logged in using ChatGPT',
         requires_custom_command: false,
       },
@@ -43,7 +43,7 @@ function buildAgentCatalog() {
         available: true,
         authenticated: true,
         default_for_external: false,
-        command_preview: 'python3 scripts/adapter_claude.py {request_file}',
+        command_preview: null,
         auth_message: 'Claude Code detected',
         requires_custom_command: false,
       },
@@ -83,23 +83,10 @@ function buildProfiles() {
           path: 'benchmark/profiles/mcp/rippletide.mcp.json',
         },
         max_workers: 2,
-        tags: ['demo', 'anthropic'],
-        demo_rank: 100,
         proof_run: {
           run_id: '15ddae9ccd6e',
-          status: 'completed',
-          inputs: {
-            profile_id: 'anthropic-demo',
-            profile_name: 'Anthropic demo',
-            agent_backend: 'claude',
-            runner_kind: 'external',
-            mcp_source_type: 'file',
-            mcp_source_origin: 'benchmark/profiles/mcp/rippletide.mcp.json',
-          },
-          benchmark: {
-            average_score: 0.8473,
-            task_success_rate: 1,
-          },
+          md_summary: { adherence_rate: 0.71 },
+          mcp_summary: { adherence_rate: 0.85 },
         },
       },
       {
@@ -114,11 +101,128 @@ function buildProfiles() {
           path: 'benchmark/profiles/mcp/rippletide.mcp.json',
         },
         max_workers: 2,
-        tags: ['demo', 'quickstart'],
-        demo_rank: 20,
         proof_run: null,
       },
     ],
+  };
+}
+
+function buildPrecheckResponse(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    profile_id: 'anthropic-demo',
+    profile_name: 'Anthropic demo',
+    source_root: '/tmp/repo',
+    runner_kind: 'external',
+    agent_backend: 'claude',
+    instruction_sources: [
+      {
+        type: 'repo_file',
+        origin: 'benchmark/profiles/prompts/studio-anthropic.md',
+        label: 'Anthropic demo prompt',
+      },
+    ],
+    mcp_source_type: 'file',
+    mcp_source_origin: 'benchmark/profiles/mcp/rippletide.mcp.json',
+    capabilities: {
+      supported: true,
+      support_reason: 'Detected a pytest-compatible repository.',
+      test_runner: 'pytest',
+      language: 'python',
+    },
+    precheck: {
+      total_rules: 12,
+      benchmarkable_rules: 9,
+      excluded_rules: 3,
+      covered_rules: 10,
+      missing_rules: 1,
+      ambiguous_rules: 1,
+      requires_confirmation: false,
+      thresholds: {
+        missing_count: 5,
+        missing_percent: 0.1,
+      },
+      rules: [
+        {
+          rule_id: 'benchmark-agents-1',
+          source_rule_id: 'agents-1',
+          category: 'validation',
+          severity: 'hard',
+          benchmarkable: true,
+          benchmark_family: 'validate_before_conclude',
+          normalized_claim: 'validate before conclude',
+          raw_text: 'Validate before concluding.',
+          source_file: 'AGENTS.md',
+          non_benchmarkable_reason: '',
+          coverage: {
+            status: 'covered',
+            evidence_source: 'manifest',
+            explanation: 'Covered.',
+          },
+        },
+      ],
+    },
+    ...overrides,
+  };
+}
+
+function buildBenchmarkSummary() {
+  return {
+    run_id: 'run-123',
+    status: 'completed',
+    inputs: {
+      profile_id: 'anthropic-demo',
+      profile_name: 'Anthropic demo',
+      agent_backend: 'claude',
+      mcp_source_type: 'file',
+    },
+    md_summary: {
+      rule_count: 9,
+      adherence_rate: 0.66,
+      pass_count: 5,
+      partial_count: 2,
+      fail_count: 2,
+    },
+    mcp_summary: {
+      rule_count: 9,
+      adherence_rate: 0.88,
+      pass_count: 8,
+      partial_count: 1,
+      fail_count: 0,
+    },
+    category_comparisons: [
+      {
+        category: 'validation',
+        md_rate: 0.5,
+        mcp_rate: 1,
+        delta: 0.5,
+        rule_count: 1,
+      },
+    ],
+    rule_comparisons: [
+      {
+        rule_id: 'benchmark-agents-1',
+        category: 'validation',
+        md_verdict: 'fail',
+        mcp_verdict: 'pass',
+        delta: 1,
+        md_result: {
+          verdict: 'fail',
+          ratio: 0,
+          evidence: ['MD failed to validate.'],
+        },
+        mcp_result: {
+          verdict: 'pass',
+          ratio: 1,
+          evidence: ['MCP validated successfully.'],
+        },
+      },
+    ],
+    violations: {
+      md_only: ['benchmark-agents-1'],
+      mcp_only: [],
+      shared: [],
+    },
+    benchmark_runtime_ms: 80000,
   };
 }
 
@@ -132,7 +236,7 @@ describe('BenchmarkStudioPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders profile-first quick start cards', async () => {
+  it('renders profile-first quick start and proof run details', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => buildAgentCatalog() })
@@ -143,7 +247,7 @@ describe('BenchmarkStudioPage', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: /run reusable benchmark profiles instead of rebuilding the mcp by hand/i,
+        name: /measure rule adherence, not generic agent behavior/i,
       })
     ).toBeInTheDocument();
 
@@ -151,80 +255,23 @@ describe('BenchmarkStudioPage', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/profiles');
     });
 
-    expect(screen.getAllByRole('button', { name: /anthropic demo/i })[0]).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /run selected profile/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /run precheck/i })[0]).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /export proof run/i })).toHaveAttribute(
       'href',
       '/api/runs/15ddae9ccd6e/export'
     );
   });
 
-  it('can launch a profile run and then launch a custom one-off run', async () => {
+  it('runs precheck first and then launches the benchmark', async () => {
     const user = userEvent.setup();
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => buildAgentCatalog() })
       .mockResolvedValueOnce({ ok: true, json: async () => buildProfiles() })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ run_id: 'profile-run', status: 'queued' }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ run_id: 'profile-run', status: 'running' }) })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          run_id: 'profile-run',
-          status: 'completed',
-          summary: {
-            inputs: {
-              profile_id: 'anthropic-demo',
-              profile_name: 'Anthropic demo',
-              agent_backend: 'claude',
-              runner_kind: 'external',
-              mcp_source_type: 'file',
-            },
-            benchmark: { average_score: 0.84, task_success_rate: 1 },
-            alignment: { issue_count: 4, by_status: { matched: 2 } },
-            capabilities: {
-              supported: true,
-              support_reason: 'Detected a pytest-compatible repository.',
-              test_runner: 'pytest',
-            },
-            runs: [],
-          },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          run_id: 'custom-run',
-          status: 'queued',
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ run_id: 'custom-run', status: 'running' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          run_id: 'custom-run',
-          status: 'completed',
-          summary: {
-            inputs: {
-              profile_id: null,
-              agent_backend: 'custom',
-              runner_kind: 'external',
-              mcp_source_type: 'command',
-            },
-            benchmark: { average_score: 0.8, task_success_rate: 1 },
-            alignment: { issue_count: 1, by_status: { matched: 1 } },
-            capabilities: {
-              supported: true,
-              support_reason: 'Detected a pytest-compatible repository.',
-              test_runner: 'pytest',
-            },
-            runs: [],
-          },
-        }),
-      });
+      .mockResolvedValueOnce({ ok: true, json: async () => buildPrecheckResponse() })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ run_id: 'run-123', status: 'queued' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ run_id: 'run-123', status: 'running' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ run_id: 'run-123', status: 'completed', summary: buildBenchmarkSummary() }) });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<BenchmarkStudioPage />);
@@ -233,18 +280,32 @@ describe('BenchmarkStudioPage', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/profiles');
     });
 
-    await user.click(screen.getByRole('button', { name: /run selected profile/i }));
+    await user.click(screen.getAllByRole('button', { name: /^run precheck$/i })[0]);
 
     await waitFor(() => {
       expect(
         fetchMock.mock.calls.some(
           (call) =>
-            call[0] === '/api/profiles/anthropic-demo/run' &&
+            call[0] === '/api/precheck' &&
             (call[1] as { method?: string } | undefined)?.method === 'POST'
         )
       ).toBe(true);
     });
-    expect(MockEventSource.instances[0]?.url).toBe('/api/runs/profile-run/events');
+    expect(screen.getByText(/the mcp coverage is good enough to benchmark without confirmation/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /launch benchmark/i }));
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(
+          (call) =>
+            call[0] === '/api/benchmark' &&
+            (call[1] as { method?: string } | undefined)?.method === 'POST'
+        )
+      ).toBe(true);
+    });
+
+    expect(MockEventSource.instances[0]?.url).toBe('/api/runs/run-123/events');
 
     await act(async () => {
       MockEventSource.instances[0].emit({
@@ -254,30 +315,13 @@ describe('BenchmarkStudioPage', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Anthropic demo', level: 4 })).toBeInTheDocument();
-      expect(screen.getByText(/84%/i)).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledTimes(6);
     });
 
-    await user.click(screen.getByRole('button', { name: /custom adapter/i }));
-    await user.click(screen.getByRole('button', { name: /another local repo/i }));
-    await user.type(screen.getByLabelText(/local repo path/i), '/tmp/rippletide-platform');
-    await user.click(screen.getByText(/manual instruction and mcp overrides/i));
-    await user.selectOptions(screen.getByLabelText(/mcp source type/i), 'command');
-    await user.type(screen.getByLabelText(/mcp export command/i), 'python3 scripts/export-mcp.py');
-    await user.type(
-      screen.getByLabelText(/custom adapter command/i),
-      'python3 /abs/path/to/adapter.py {request_file}'
-    );
-    await user.click(screen.getByRole('button', { name: /launch custom run/i }));
-
     await waitFor(() => {
-      expect(
-        fetchMock.mock.calls.some(
-          (call) =>
-            call[0] === '/api/runs' &&
-            (call[1] as { method?: string } | undefined)?.method === 'POST'
-        )
-      ).toBe(true);
+      expect(screen.getByText(/MD adherence/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/88%/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/benchmark-agents-1/i).length).toBeGreaterThan(0);
     });
   });
 });

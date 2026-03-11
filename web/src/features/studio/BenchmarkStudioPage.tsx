@@ -5,14 +5,15 @@ import { Button } from '../../components/ui/Button';
 import {
   buildStudioEventsUrl,
   buildStudioExportUrl,
-  createStudioProfileRun,
-  createStudioRun,
   getAgentCatalog,
   getBenchmarkProfiles,
   getStudioRun,
+  runStudioBenchmark,
+  runStudioPrecheck,
 } from '../../lib/studio/api';
 import type {
   AgentBackendStatus,
+  BenchmarkPrecheckResponse,
   CreateStudioRunInput,
   DemoProfileResponse,
   StudioEventEnvelope,
@@ -20,8 +21,8 @@ import type {
 } from '../../lib/studio/types';
 import styles from './BenchmarkStudioPage.module.css';
 
-type ExecutionPreset = 'demo' | 'codex' | 'claude' | 'custom';
 type TargetMode = 'included' | 'custom';
+type ExecutionPreset = 'demo' | 'codex' | 'claude' | 'custom';
 type McpSourceType = 'inline' | 'file' | 'command';
 
 const DEFAULT_MCP_JSON = `{
@@ -80,35 +81,70 @@ function formatEventLabel(eventType: string): string {
   return eventType.replaceAll('_', ' ');
 }
 
-function statusLabel(agent: AgentBackendStatus): string {
-  if (agent.requires_custom_command) {
-    return 'manual';
-  }
-  if (!agent.available) {
-    return 'unavailable';
-  }
-  return agent.authenticated ? 'ready' : 'needs auth';
+function buildInputFromProfile(profile: DemoProfileResponse): CreateStudioRunInput {
+  const mcpSourceType = profile.mcp_source.type;
+  return {
+    profileId: profile.id,
+    repoPath: '',
+    repoArchive: null,
+    instructionFiles: [],
+    mcpJson:
+      mcpSourceType === 'inline'
+        ? JSON.stringify(profile.mcp_source.content ?? {}, null, 2)
+        : DEFAULT_MCP_JSON,
+    mcpSourceType,
+    mcpSourcePath: profile.mcp_source.path ?? '',
+    mcpSourceCommand: profile.mcp_source.command ?? '',
+    runnerKind: profile.execution_preset === 'demo' ? 'demo' : 'external',
+    agentBackend:
+      profile.execution_preset === 'claude'
+        ? 'claude'
+        : profile.execution_preset === 'custom'
+          ? 'custom'
+          : 'codex',
+    adapterCommand: '',
+    maxWorkers: profile.max_workers,
+  };
 }
 
-function toRunConfig(preset: ExecutionPreset): {
-  runnerKind: 'demo' | 'external';
-  agentBackend: 'codex' | 'claude' | 'custom';
-} {
-  if (preset === 'demo') {
-    return { runnerKind: 'demo', agentBackend: 'codex' };
-  }
-  if (preset === 'claude') {
-    return { runnerKind: 'external', agentBackend: 'claude' };
-  }
-  if (preset === 'custom') {
-    return { runnerKind: 'external', agentBackend: 'custom' };
-  }
-  return { runnerKind: 'external', agentBackend: 'codex' };
+function buildInputFromCustom(
+  targetMode: TargetMode,
+  repoPath: string,
+  repoArchive: File | null,
+  instructionFiles: File[],
+  executionPreset: ExecutionPreset,
+  mcpSourceType: McpSourceType,
+  mcpJson: string,
+  mcpFilePath: string,
+  mcpCommand: string,
+  adapterCommand: string,
+  maxWorkers: number
+): CreateStudioRunInput {
+  return {
+    profileId: null,
+    repoPath: targetMode === 'custom' ? repoPath : '',
+    repoArchive: targetMode === 'custom' ? repoArchive : null,
+    instructionFiles,
+    mcpJson,
+    mcpSourceType,
+    mcpSourcePath: mcpFilePath,
+    mcpSourceCommand: mcpCommand,
+    runnerKind: executionPreset === 'demo' ? 'demo' : 'external',
+    agentBackend:
+      executionPreset === 'claude'
+        ? 'claude'
+        : executionPreset === 'custom'
+          ? 'custom'
+          : 'codex',
+    adapterCommand,
+    maxWorkers,
+  };
 }
 
 export function BenchmarkStudioPage(): JSX.Element {
   const [profiles, setProfiles] = useState<DemoProfileResponse[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [agents, setAgents] = useState<AgentBackendStatus[]>(FALLBACK_AGENTS);
   const [targetMode, setTargetMode] = useState<TargetMode>('included');
   const [repoPath, setRepoPath] = useState('');
   const [repoArchive, setRepoArchive] = useState<File | null>(null);
@@ -119,111 +155,21 @@ export function BenchmarkStudioPage(): JSX.Element {
   const [mcpFilePath, setMcpFilePath] = useState('');
   const [mcpCommand, setMcpCommand] = useState('');
   const [adapterCommand, setAdapterCommand] = useState('');
-  const [maxWorkers, setMaxWorkers] = useState(4);
+  const [maxWorkers, setMaxWorkers] = useState(8);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [precheckResult, setPrecheckResult] = useState<BenchmarkPrecheckResponse | null>(null);
+  const [pendingInput, setPendingInput] = useState<CreateStudioRunInput | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [runDetails, setRunDetails] = useState<StudioRunDetails | null>(null);
   const [events, setEvents] = useState<StudioEventEnvelope[]>([]);
-  const [agents, setAgents] = useState<AgentBackendStatus[]>(FALLBACK_AGENTS);
   const eventSourceRef = useRef<EventSource | null>(null);
-
-  const { runnerKind, agentBackend } = useMemo(
-    () => toRunConfig(executionPreset),
-    [executionPreset]
-  );
-
-  const selectedAgent = useMemo(
-    () =>
-      executionPreset === 'demo'
-        ? null
-        : agents.find((agent) => agent.key === agentBackend) ?? null,
-    [agentBackend, agents, executionPreset]
-  );
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
     [profiles, selectedProfileId]
   );
-
-  const latestStats = useMemo(() => {
-    const defaults = {
-      ruleCount: 0,
-      extractionMode: 'pending',
-      supportedTasks: 0,
-      alignmentIssues: 0,
-      repoSupported: false,
-    };
-    return events.reduce((accumulator, event) => {
-      if (event.event_type === 'instructions_compiled') {
-        return {
-          ...accumulator,
-          ruleCount: Number(event.payload?.rule_count ?? 0),
-          extractionMode: String(event.payload?.extraction_mode ?? 'deterministic'),
-        };
-      }
-      if (event.event_type === 'bundle_ready') {
-        return {
-          ...accumulator,
-          supportedTasks: Number(event.payload?.supported_tasks ?? 0),
-          alignmentIssues: Number(event.payload?.alignment_issues ?? 0),
-          repoSupported: Boolean(event.payload?.repo_supported),
-        };
-      }
-      return accumulator;
-    }, defaults);
-  }, [events]);
-
-  const presetCards = useMemo(
-    () => [
-      {
-        key: 'demo' as const,
-        label: 'Quick demo',
-        description: 'Runs the generated benchmark with the synthetic runner.',
-        available: true,
-        detail: 'Best path for first-time validation.',
-      },
-      {
-        key: 'codex' as const,
-        label: 'Real run with Codex',
-        description: 'Uses the Codex adapter and runs the matrix for real.',
-        available: Boolean(
-          agents.find((agent) => agent.key === 'codex')?.available &&
-            agents.find((agent) => agent.key === 'codex')?.authenticated
-        ),
-        detail: agents.find((agent) => agent.key === 'codex')?.auth_message ?? 'Checking Codex…',
-      },
-      {
-        key: 'claude' as const,
-        label: 'Real run with Claude Code',
-        description: 'Uses the Claude Code adapter and is ready for the Anthropic demo path.',
-        available: Boolean(
-          agents.find((agent) => agent.key === 'claude')?.available &&
-            agents.find((agent) => agent.key === 'claude')?.authenticated
-        ),
-        detail:
-          agents.find((agent) => agent.key === 'claude')?.auth_message ?? 'Checking Claude Code…',
-      },
-      {
-        key: 'custom' as const,
-        label: 'Custom adapter',
-        description: 'Use any command that accepts `{request_file}` and streams benchmark NDJSON.',
-        available: true,
-        detail: 'For non-Codex, non-Claude integrations.',
-      },
-    ],
-    [agents]
-  );
-
-  const launchBlocked =
-    (executionPreset === 'custom' && !adapterCommand.trim()) ||
-    (executionPreset !== 'demo' && selectedAgent != null && !selectedAgent.requires_custom_command
-      ? !selectedAgent.available || !selectedAgent.authenticated
-      : false) ||
-    (targetMode === 'custom' && !repoPath.trim() && repoArchive == null) ||
-    (mcpSourceType === 'file' && !mcpFilePath.trim()) ||
-    (mcpSourceType === 'command' && !mcpCommand.trim());
 
   useEffect(() => {
     void getAgentCatalog()
@@ -267,7 +213,6 @@ export function BenchmarkStudioPage(): JSX.Element {
     eventSourceRef.current?.close();
     const eventSource = new EventSource(buildStudioEventsUrl(runIdentifier));
     eventSourceRef.current = eventSource;
-
     eventSource.onmessage = (message) => {
       try {
         const payload = JSON.parse(message.data) as StudioEventEnvelope;
@@ -276,7 +221,7 @@ export function BenchmarkStudioPage(): JSX.Element {
           eventSource.close();
           return;
         }
-        setEvents((current) => [payload, ...current].slice(0, 12));
+        setEvents((current) => [payload, ...current].slice(0, 20));
         void refreshRun(runIdentifier);
       } catch {
         setEvents((current) => [
@@ -293,91 +238,125 @@ export function BenchmarkStudioPage(): JSX.Element {
     };
   }
 
-  async function handleProfileRun(profileId: string): Promise<void> {
+  async function launchPrecheck(input: CreateStudioRunInput): Promise<void> {
     setSubmitting(true);
     setError(null);
-    setEvents([]);
+    setPrecheckResult(null);
     try {
-      const response = await createStudioProfileRun(profileId);
-      setRunId(response.run_id);
-      await refreshRun(response.run_id);
-      connectToEvents(response.run_id);
+      const payload = await runStudioPrecheck(input);
+      setPendingInput(input);
+      setPrecheckResult(payload);
     } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : 'Unknown studio error.';
+      const message = submitError instanceof Error ? submitError.message : 'Unknown precheck error.';
       setError(message);
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  async function launchBenchmark(confirmedToContinue = false): Promise<void> {
+    if (pendingInput == null) {
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setEvents([]);
-
-    const payload: CreateStudioRunInput = {
-      profileId: null,
-      repoPath: targetMode === 'custom' ? repoPath : '',
-      repoArchive: targetMode === 'custom' ? repoArchive : null,
-      instructionFiles,
-      mcpJson,
-      mcpSourceType,
-      mcpSourcePath: mcpFilePath,
-      mcpSourceCommand: mcpCommand,
-      runnerKind,
-      agentBackend,
-      adapterCommand,
-      maxWorkers,
-    };
-
     try {
-      const response = await createStudioRun(payload);
+      const response = await runStudioBenchmark(pendingInput, confirmedToContinue);
       setRunId(response.run_id);
       await refreshRun(response.run_id);
       connectToEvents(response.run_id);
     } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : 'Unknown studio error.';
-      setError(message);
+      const precheck = (submitError as Error & { precheck?: BenchmarkPrecheckResponse }).precheck;
+      if (precheck) {
+        setPrecheckResult(precheck);
+        setError('The MCP is missing too many MD rules. Confirm before benchmarking.');
+      } else {
+        const message = submitError instanceof Error ? submitError.message : 'Unknown benchmark error.';
+        setError(message);
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
-  const summary = runDetails?.summary;
+  const selectedProfileProofRun = selectedProfile?.proof_run ?? null;
+  const selectedProfileProofRunExportHref = selectedProfileProofRun
+    ? buildStudioExportUrl(selectedProfileProofRun.run_id)
+    : null;
+  const selectedProfileProofMdRate =
+    selectedProfileProofRun?.md_summary?.adherence_rate ??
+    selectedProfileProofRun?.benchmark?.average_score;
+  const selectedProfileProofMcpRate =
+    selectedProfileProofRun?.mcp_summary?.adherence_rate ??
+    selectedProfileProofRun?.benchmark?.average_score;
   const exportHref = runId ? buildStudioExportUrl(runId) : null;
-  const proofRun = selectedProfile?.proof_run ?? null;
-  const proofRunExportHref = proofRun ? buildStudioExportUrl(proofRun.run_id) : null;
+  const runSummary = runDetails?.summary;
+  const requiresConfirmation = precheckResult?.precheck.requires_confirmation ?? false;
+
+  const profileCards = useMemo(
+    () =>
+      profiles.map((profile) => (
+        <button
+          key={profile.id}
+          type="button"
+          className={[
+            styles.choiceCard,
+            selectedProfile?.id === profile.id ? styles.choiceCardSelected : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          onClick={() => setSelectedProfileId(profile.id)}
+        >
+          <div className={styles.choiceHeader}>
+            <strong>{profile.name}</strong>
+            <span className={styles.choiceStatus}>{profile.execution_preset}</span>
+          </div>
+          <p className={styles.choiceDescription}>{profile.description}</p>
+          <p className={styles.choiceMeta}>
+            MCP: {profile.mcp_source.type} · target: {profile.target_mode}
+          </p>
+        </button>
+      )),
+    [profiles, selectedProfile]
+  );
+
+  const customInput = buildInputFromCustom(
+    targetMode,
+    repoPath,
+    repoArchive,
+    instructionFiles,
+    executionPreset,
+    mcpSourceType,
+    mcpJson,
+    mcpFilePath,
+    mcpCommand,
+    adapterCommand,
+    maxWorkers
+  );
 
   return (
     <section className={styles.page}>
       <div className={styles.hero}>
         <div className={styles.heroCopy}>
           <span className={styles.eyebrow}>Dynamic Benchmark Studio</span>
-          <h2 className={styles.title}>Run reusable benchmark profiles instead of rebuilding the MCP by hand.</h2>
+          <h2 className={styles.title}>Measure rule adherence, not generic agent behavior.</h2>
           <p className={styles.copy}>
-            Profiles now version the target, the agent, the instruction sources, and the MCP source.
-            Ad hoc one-off runs are still available below for advanced cases.
+            The benchmark now has two stages: precheck the MCP against the MD, then run the full
+            `MD vs MCP` rule-adherence matrix in parallel.
           </p>
         </div>
 
         <Card className={styles.quickStartCard}>
-          <span className={styles.metricLabel}>Quick start</span>
+          <span className={styles.metricLabel}>Flow</span>
           <ol className={styles.quickStartList}>
-            <li>Pick a saved profile.</li>
-            <li>Review the proof run and the MCP source.</li>
-            <li>Click `Run selected profile`.</li>
+            <li>Select a profile or a custom config.</li>
+            <li>Run precheck.</li>
+            <li>Confirm only if the MCP is missing too many rules.</li>
+            <li>Run the benchmark and compare MD vs MCP.</li>
           </ol>
-          <p className={styles.metricMeta}>
-            The included demo profiles work immediately after `make setup` and `make studio`.
-          </p>
         </Card>
       </div>
-
-      <InlineNotice tone="info">
-        Lowest-friction path: `make setup`, `make studio`, open `/studio`, select `Anthropic demo`,
-        then click `Run selected profile`.
-      </InlineNotice>
 
       {catalogError ? <InlineNotice tone="info">{catalogError}</InlineNotice> : null}
       {error ? <InlineNotice tone="error">{error}</InlineNotice> : null}
@@ -385,36 +364,11 @@ export function BenchmarkStudioPage(): JSX.Element {
       <div className={styles.layout}>
         <Card className={styles.primaryCard}>
           <div className={styles.sectionHeader}>
-            <span className={styles.sectionEyebrow}>Quick start from profile</span>
-            <h3 className={styles.sectionTitle}>Pick a saved benchmark setup</h3>
+            <span className={styles.sectionEyebrow}>Step 1</span>
+            <h3 className={styles.sectionTitle}>Select a profile</h3>
           </div>
 
-          <div className={styles.choiceGrid}>
-            {profiles.map((profile) => (
-              <button
-                key={profile.id}
-                type="button"
-                className={[
-                  styles.choiceCard,
-                  selectedProfile?.id === profile.id ? styles.choiceCardSelected : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => setSelectedProfileId(profile.id)}
-              >
-                <div className={styles.choiceHeader}>
-                  <strong>{profile.name}</strong>
-                  <span className={styles.choiceStatus}>
-                    {profile.execution_preset === 'demo' ? 'demo' : profile.execution_preset}
-                  </span>
-                </div>
-                <p className={styles.choiceDescription}>{profile.description}</p>
-                <p className={styles.choiceMeta}>
-                  MCP: {profile.mcp_source.type} · target: {profile.target_mode}
-                </p>
-              </button>
-            ))}
-          </div>
+          <div className={styles.choiceGrid}>{profileCards}</div>
 
           {selectedProfile ? (
             <div className={styles.profileDetails}>
@@ -422,13 +376,14 @@ export function BenchmarkStudioPage(): JSX.Element {
                 <span className={styles.sectionEyebrow}>Selected profile</span>
                 <h4 className={styles.subTitle}>{selectedProfile.name}</h4>
               </div>
+
               <dl className={styles.definitionList}>
                 <div>
                   <dt>Execution</dt>
                   <dd>{selectedProfile.execution_preset}</dd>
                 </div>
                 <div>
-                  <dt>Target mode</dt>
+                  <dt>Target</dt>
                   <dd>{selectedProfile.target_mode}</dd>
                 </div>
                 <div>
@@ -446,104 +401,88 @@ export function BenchmarkStudioPage(): JSX.Element {
               </dl>
 
               <div className={styles.actions}>
-                <Button onClick={() => void handleProfileRun(selectedProfile.id)} disabled={submitting}>
-                  {submitting ? 'Launching…' : 'Run selected profile'}
+                <Button
+                  onClick={() => selectedProfile && void launchPrecheck(buildInputFromProfile(selectedProfile))}
+                  disabled={submitting}
+                >
+                  {submitting ? 'Running…' : 'Run precheck'}
                 </Button>
-                {proofRunExportHref ? (
-                  <a className={styles.exportLink} href={proofRunExportHref}>
+                {selectedProfileProofRunExportHref ? (
+                  <a className={styles.exportLink} href={selectedProfileProofRunExportHref}>
                     Export proof run
                   </a>
                 ) : null}
               </div>
-
-              {proofRun ? (
-                <div className={styles.metricStack}>
-                  <div>
-                    <span className={styles.metricLabel}>Proof run</span>
-                    <strong>{proofRun.run_id}</strong>
-                  </div>
-                  <div>
-                    <span className={styles.metricLabel}>Score</span>
-                    <strong>{formatPercent(proofRun.benchmark?.average_score)}</strong>
-                  </div>
-                  <div>
-                    <span className={styles.metricLabel}>Task success</span>
-                    <strong>{formatPercent(proofRun.benchmark?.task_success_rate)}</strong>
-                  </div>
-                </div>
-              ) : (
-                <p className={styles.choiceHint}>No saved proof run found for this profile yet.</p>
-              )}
             </div>
           ) : null}
         </Card>
 
         <div className={styles.sideColumn}>
           <Card className={styles.statusCard}>
-            <span className={styles.sectionEyebrow}>Current setup</span>
+            <span className={styles.sectionEyebrow}>Proof run</span>
+            {selectedProfileProofRun ? (
+              <div className={styles.metricStack}>
+                <div>
+                  <span className={styles.metricLabel}>Run id</span>
+                  <strong>{selectedProfileProofRun.run_id}</strong>
+                </div>
+                <div>
+                  <span className={styles.metricLabel}>MD score</span>
+                  <strong>{formatPercent(selectedProfileProofMdRate)}</strong>
+                </div>
+                <div>
+                  <span className={styles.metricLabel}>MCP score</span>
+                  <strong>{formatPercent(selectedProfileProofMcpRate)}</strong>
+                </div>
+              </div>
+            ) : (
+              <p className={styles.choiceHint}>No proof run saved for this profile yet.</p>
+            )}
+          </Card>
+
+          <Card className={styles.statusCard}>
+            <span className={styles.sectionEyebrow}>Current run</span>
             <dl className={styles.definitionList}>
               <div>
-                <dt>Run status</dt>
+                <dt>Status</dt>
                 <dd>{runDetails?.status ?? 'idle'}</dd>
               </div>
               <div>
                 <dt>Profile</dt>
-                <dd>{summary?.inputs?.profile_name ?? selectedProfile?.name ?? 'none'}</dd>
+                <dd>{runSummary?.inputs?.profile_name ?? precheckResult?.profile_name ?? 'none'}</dd>
               </div>
               <div>
                 <dt>Agent</dt>
-                <dd>{summary?.inputs?.agent_backend ?? 'pending'}</dd>
+                <dd>{runSummary?.inputs?.agent_backend ?? precheckResult?.agent_backend ?? 'pending'}</dd>
               </div>
               <div>
                 <dt>MCP source</dt>
-                <dd>{summary?.inputs?.mcp_source_type ?? 'pending'}</dd>
-              </div>
-              <div>
-                <dt>Repo support</dt>
-                <dd>
-                  {summary?.capabilities?.supported
-                    ? 'supported'
-                    : latestStats.repoSupported
-                      ? 'supported'
-                      : 'pending'}
-                </dd>
+                <dd>{runSummary?.inputs?.mcp_source_type ?? precheckResult?.mcp_source_type ?? 'pending'}</dd>
               </div>
             </dl>
-          </Card>
-
-          <Card className={styles.statusCard}>
-            <span className={styles.sectionEyebrow}>Latest run</span>
-            <div className={styles.metricStack}>
-              <div>
-                <span className={styles.metricLabel}>Rules extracted</span>
-                <strong>{latestStats.ruleCount || '—'}</strong>
-              </div>
-              <div>
-                <span className={styles.metricLabel}>Alignment issues</span>
-                <strong>{(summary?.alignment?.issue_count ?? latestStats.alignmentIssues) || '—'}</strong>
-              </div>
-              <div>
-                <span className={styles.metricLabel}>Benchmark score</span>
-                <strong>{summary?.benchmark ? formatPercent(summary.benchmark.average_score) : 'Pending'}</strong>
-              </div>
-            </div>
+            {exportHref ? (
+              <a className={styles.exportLink} href={exportHref}>
+                Export latest run
+              </a>
+            ) : null}
           </Card>
         </div>
       </div>
 
       <Card className={styles.primaryCard}>
         <div className={styles.sectionHeader}>
-          <span className={styles.sectionEyebrow}>Custom one-off run</span>
-          <h3 className={styles.sectionTitle}>Override the repo, the prompts, or the MCP source manually</h3>
+          <span className={styles.sectionEyebrow}>Custom one-off config</span>
+          <h3 className={styles.sectionTitle}>Override the target, the instructions, or the MCP source</h3>
         </div>
 
-        <form className={styles.form} onSubmit={handleSubmit}>
+        <form
+          className={styles.form}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void launchPrecheck(customInput);
+          }}
+        >
           <div className={styles.sectionBlock}>
-            <div className={styles.sectionHeader}>
-              <span className={styles.sectionEyebrow}>Target</span>
-              <h4 className={styles.subTitle}>Choose the repo</h4>
-            </div>
-
             <div className={styles.choiceGrid}>
               <button
                 type="button"
@@ -556,7 +495,7 @@ export function BenchmarkStudioPage(): JSX.Element {
                 onClick={() => setTargetMode('included')}
               >
                 <strong>Included benchmark repo</strong>
-                <p className={styles.choiceDescription}>Uses the repo you cloned with the Studio.</p>
+                <p className={styles.choiceDescription}>Use the current repo as the target.</p>
               </button>
               <button
                 type="button"
@@ -569,7 +508,7 @@ export function BenchmarkStudioPage(): JSX.Element {
                 onClick={() => setTargetMode('custom')}
               >
                 <strong>Another local repo</strong>
-                <p className={styles.choiceDescription}>Path or zip for a different project.</p>
+                <p className={styles.choiceDescription}>Use a local path or zip for a different target.</p>
               </button>
             </div>
 
@@ -581,7 +520,6 @@ export function BenchmarkStudioPage(): JSX.Element {
                     className={styles.input}
                     value={repoPath}
                     onChange={(event) => setRepoPath(event.target.value)}
-                    placeholder="/Users/you/Documents/project"
                   />
                 </label>
                 <label className={styles.field}>
@@ -598,36 +536,20 @@ export function BenchmarkStudioPage(): JSX.Element {
           </div>
 
           <div className={styles.sectionBlock}>
-            <div className={styles.sectionHeader}>
-              <span className={styles.sectionEyebrow}>Execution</span>
-              <h4 className={styles.subTitle}>Choose the runtime backend</h4>
-            </div>
-
             <div className={styles.choiceGrid}>
-              {presetCards.map((preset) => (
+              {(['demo', 'codex', 'claude', 'custom'] as ExecutionPreset[]).map((preset) => (
                 <button
-                  key={preset.key}
+                  key={preset}
                   type="button"
                   className={[
                     styles.choiceCard,
-                    executionPreset === preset.key ? styles.choiceCardSelected : '',
-                    !preset.available ? styles.choiceCardDisabled : '',
+                    executionPreset === preset ? styles.choiceCardSelected : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
-                  onClick={() => {
-                    if (preset.available) {
-                      setExecutionPreset(preset.key);
-                    }
-                  }}
-                  disabled={!preset.available}
+                  onClick={() => setExecutionPreset(preset)}
                 >
-                  <div className={styles.choiceHeader}>
-                    <strong>{preset.label}</strong>
-                    <span className={styles.choiceStatus}>{preset.available ? 'ready' : 'not ready'}</span>
-                  </div>
-                  <p className={styles.choiceDescription}>{preset.description}</p>
-                  <p className={styles.choiceMeta}>{preset.detail}</p>
+                  <strong>{preset}</strong>
                 </button>
               ))}
             </div>
@@ -639,15 +561,13 @@ export function BenchmarkStudioPage(): JSX.Element {
                   className={styles.input}
                   value={adapterCommand}
                   onChange={(event) => setAdapterCommand(event.target.value)}
-                  placeholder="python3 /abs/path/to/adapter.py {request_file}"
                 />
               </label>
             ) : null}
           </div>
 
           <details className={styles.advancedPanel}>
-            <summary className={styles.advancedSummary}>Manual instruction and MCP overrides</summary>
-
+            <summary className={styles.advancedSummary}>Instruction and MCP overrides</summary>
             <div className={styles.stackFields}>
               <label className={styles.field}>
                 <span className={styles.label}>Instruction files</span>
@@ -659,7 +579,6 @@ export function BenchmarkStudioPage(): JSX.Element {
                   onChange={(event) => setInstructionFiles(Array.from(event.target.files ?? []))}
                 />
               </label>
-
               <label className={styles.field}>
                 <span className={styles.label}>MCP source type</span>
                 <select
@@ -667,15 +586,14 @@ export function BenchmarkStudioPage(): JSX.Element {
                   value={mcpSourceType}
                   onChange={(event) => setMcpSourceType(event.target.value as McpSourceType)}
                 >
-                  <option value="inline">inline JSON</option>
-                  <option value="file">file path</option>
+                  <option value="inline">inline</option>
+                  <option value="file">file</option>
                   <option value="command">command</option>
                 </select>
               </label>
-
               {mcpSourceType === 'inline' ? (
                 <label className={styles.field}>
-                  <span className={styles.label}>MCP config JSON</span>
+                  <span className={styles.label}>MCP JSON</span>
                   <textarea
                     className={styles.textarea}
                     rows={10}
@@ -684,38 +602,33 @@ export function BenchmarkStudioPage(): JSX.Element {
                   />
                 </label>
               ) : null}
-
               {mcpSourceType === 'file' ? (
                 <label className={styles.field}>
-                  <span className={styles.label}>MCP JSON file path</span>
+                  <span className={styles.label}>MCP file path</span>
                   <input
                     className={styles.input}
                     value={mcpFilePath}
                     onChange={(event) => setMcpFilePath(event.target.value)}
-                    placeholder="benchmark/profiles/mcp/rippletide.mcp.json"
                   />
                 </label>
               ) : null}
-
               {mcpSourceType === 'command' ? (
                 <label className={styles.field}>
-                  <span className={styles.label}>MCP export command</span>
+                  <span className={styles.label}>MCP command</span>
                   <input
                     className={styles.input}
                     value={mcpCommand}
                     onChange={(event) => setMcpCommand(event.target.value)}
-                    placeholder="python3 scripts/export-mcp.py"
                   />
                 </label>
               ) : null}
-
               <label className={styles.field}>
                 <span className={styles.label}>Parallel workers</span>
                 <input
                   className={styles.input}
                   type="number"
                   min={1}
-                  max={16}
+                  max={64}
                   value={maxWorkers}
                   onChange={(event) => setMaxWorkers(Number(event.target.value) || 1)}
                 />
@@ -724,59 +637,150 @@ export function BenchmarkStudioPage(): JSX.Element {
           </details>
 
           <div className={styles.actions}>
-            <Button type="submit" disabled={submitting || launchBlocked}>
-              {submitting ? 'Launching…' : 'Launch custom run'}
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Running…' : 'Run precheck'}
             </Button>
-            {exportHref ? (
-              <a className={styles.exportLink} href={exportHref}>
-                Export run bundle
-              </a>
-            ) : null}
           </div>
         </form>
       </Card>
 
-      <Card className={styles.resultsCard}>
-        <div className={styles.sectionHeader}>
-          <span className={styles.sectionEyebrow}>Results</span>
-          <h3 className={styles.sectionTitle}>Run matrix and live events</h3>
-        </div>
+      {precheckResult ? (
+        <Card className={styles.resultsCard}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionEyebrow}>Step 2</span>
+            <h3 className={styles.sectionTitle}>Precheck result</h3>
+          </div>
+          <div className={styles.metricStack}>
+            <div>
+              <span className={styles.metricLabel}>Total rules</span>
+              <strong>{precheckResult.precheck.total_rules}</strong>
+            </div>
+            <div>
+              <span className={styles.metricLabel}>Covered by MCP</span>
+              <strong>{precheckResult.precheck.covered_rules}</strong>
+            </div>
+            <div>
+              <span className={styles.metricLabel}>Missing in MCP</span>
+              <strong>{precheckResult.precheck.missing_rules}</strong>
+            </div>
+            <div>
+              <span className={styles.metricLabel}>Ambiguous</span>
+              <strong>{precheckResult.precheck.ambiguous_rules}</strong>
+            </div>
+          </div>
 
-        {summary?.runs?.length ? (
+          {requiresConfirmation ? (
+            <InlineNotice tone="error">
+              The MCP is missing more than {precheckResult.precheck.thresholds.missing_count} rules
+              or more than {Math.round(precheckResult.precheck.thresholds.missing_percent * 100)}%
+              of the MD rule set. If you continue, the MCP benchmark will likely be penalized for the
+              missing rules.
+            </InlineNotice>
+          ) : (
+            <InlineNotice tone="success">
+              The MCP coverage is good enough to benchmark without confirmation.
+            </InlineNotice>
+          )}
+
+          <div className={styles.actions}>
+            {requiresConfirmation ? (
+              <Button onClick={() => void launchBenchmark(true)} disabled={submitting}>
+                {submitting ? 'Running…' : 'Run benchmark anyway'}
+              </Button>
+            ) : (
+              <Button onClick={() => void launchBenchmark(false)} disabled={submitting}>
+                {submitting ? 'Running…' : 'Launch benchmark'}
+              </Button>
+            )}
+          </div>
+
+          <div className={styles.eventList}>
+            {precheckResult.precheck.rules.map((rule) => (
+              <div key={rule.rule_id} className={styles.eventItem}>
+                <div className={styles.eventMeta}>
+                  <span>{rule.rule_id}</span>
+                  <span>{rule.coverage.status}</span>
+                </div>
+                <div>{rule.raw_text}</div>
+                <div className={styles.choiceMeta}>
+                  {rule.coverage.evidence_source} · {rule.coverage.explanation}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {runSummary?.md_summary && runSummary?.mcp_summary ? (
+        <Card className={styles.resultsCard}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionEyebrow}>Step 3</span>
+            <h3 className={styles.sectionTitle}>MD vs MCP benchmark</h3>
+          </div>
+
+          <div className={styles.metricStack}>
+            <div>
+              <span className={styles.metricLabel}>MD adherence</span>
+              <strong>{formatPercent(runSummary.md_summary.adherence_rate)}</strong>
+            </div>
+            <div>
+              <span className={styles.metricLabel}>MCP adherence</span>
+              <strong>{formatPercent(runSummary.mcp_summary.adherence_rate)}</strong>
+            </div>
+            <div>
+              <span className={styles.metricLabel}>Runtime</span>
+              <strong>{Math.round((runSummary.benchmark_runtime_ms ?? 0) / 1000)}s</strong>
+            </div>
+          </div>
+
           <div className={styles.runGrid}>
-            {summary.runs.map((run) => (
-              <article key={run.run_id} className={styles.runTile}>
-                <span className={styles.runTileHeader}>{run.condition}</span>
-                <strong className={styles.runTileTitle}>{run.task_id}</strong>
-                <span className={styles.runTileMeta}>Score {formatPercent(run.normalized_score)}</span>
-                <span className={styles.runTileMeta}>
-                  {run.task_success ? 'task success' : 'task incomplete'} · {run.hard_violation_count} hard violations
-                </span>
+            {(runSummary.category_comparisons ?? []).map((category) => (
+              <article key={category.category} className={styles.runTile}>
+                <span className={styles.runTileHeader}>{category.category}</span>
+                <strong className={styles.runTileTitle}>MD {formatPercent(category.md_rate)}</strong>
+                <strong className={styles.runTileTitle}>MCP {formatPercent(category.mcp_rate)}</strong>
+                <span className={styles.runTileMeta}>Delta {Math.round(category.delta * 100)} pts</span>
               </article>
             ))}
           </div>
-        ) : (
-          <p className={styles.emptyState}>
-            Launch a profile or a custom run and the MD/MCP matrix will appear here automatically.
-          </p>
-        )}
 
-        {events.length ? (
-          <ol className={styles.eventList}>
-            {events.map((event, index) => (
-              <li key={`${event.event_type}-${event.timestamp ?? index}`} className={styles.eventItem}>
-                <div className={styles.eventMeta}>
-                  <span>{formatEventLabel(event.event_type)}</span>
-                  <span>{event.timestamp ?? 'live'}</span>
+          <details className={styles.advancedPanel}>
+            <summary className={styles.advancedSummary}>Rule-by-rule diff</summary>
+            <div className={styles.eventList}>
+              {(runSummary.rule_comparisons ?? []).map((item) => (
+                <div key={item.rule_id} className={styles.eventItem}>
+                  <div className={styles.eventMeta}>
+                    <span>{item.rule_id}</span>
+                    <span>{item.category}</span>
+                  </div>
+                  <div className={styles.choiceMeta}>
+                    MD: {item.md_verdict} · MCP: {item.mcp_verdict} · Delta {Math.round(item.delta * 100)} pts
+                  </div>
                 </div>
-                <pre className={styles.eventPayload}>{JSON.stringify(event.payload ?? {}, null, 2)}</pre>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className={styles.emptyState}>No events yet. The feed will start once a run is created.</p>
-        )}
-      </Card>
+              ))}
+            </div>
+          </details>
+
+          <details className={styles.advancedPanel}>
+            <summary className={styles.advancedSummary}>Live events</summary>
+            <div className={styles.eventList}>
+              {events.length ? (
+                events.map((event, index) => (
+                  <div key={`${event.event_type}-${event.timestamp ?? index}`} className={styles.eventItem}>
+                    <div className={styles.eventMeta}>
+                      <span>{formatEventLabel(event.event_type)}</span>
+                      <span>{event.timestamp ?? 'live'}</span>
+                    </div>
+                    <pre className={styles.eventPayload}>{JSON.stringify(event.payload ?? {}, null, 2)}</pre>
+                  </div>
+                ))
+              ) : (
+                <p className={styles.choiceHint}>No live events recorded for this run.</p>
+              )}
+            </div>
+          </details>
+        </Card>
+      ) : null}
     </section>
   );
 }
