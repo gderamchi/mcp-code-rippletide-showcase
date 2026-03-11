@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "local_demo": {
+      "type": "inline",
+      "enabled": true,
+      "tools": [
+        {
+          "name": "validate before concluding"
+        },
+        {
+          "name": "make the smallest safe change"
+        },
+        {
+          "name": "explore the repository before editing"
+        },
+        {
+          "name": "do not overwrite user changes"
+        }
+      ]
+    }
+  },
+  "benchmarkClaims": [
+    "Validate before concluding.",
+    "Make the smallest safe change.",
+    "Explore the repository before editing.",
+    "Do not overwrite user changes."
+  ]
+}

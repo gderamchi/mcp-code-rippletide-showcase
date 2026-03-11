@@ -17,8 +17,8 @@
   ],
   "high_impact_command_patterns": [
     "perl -0pi",
-    "python -c .*write_text",
-    "python - <<'PY'",
+    "python(?:3(?:\\.\\d+)*)?\\s+-c .*write_text",
+    "python(?:3(?:\\.\\d+)*)?\\s+- <<'PY'",
     "cat >",
     "tee "
   ],
@@ -43,4 +43,3 @@
     "10_secret_and_instruction_safety"
   ]
 }
-

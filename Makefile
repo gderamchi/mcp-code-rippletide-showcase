@@ -25,7 +25,7 @@ studio-server:
 check:
 	pnpm web:lint
 	pnpm web:typecheck
-	pnpm web:test
+	pnpm web:test -- --run
 	$(VENV)/bin/pytest harness/tests
 
 benchmark-demo:

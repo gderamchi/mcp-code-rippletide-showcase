@@ -1,0 +1,31 @@
+{
+  "servers": [
+    {
+      "id": "rippletide",
+      "transport": "http",
+      "locator": "https://mcp.rippletide.com/mcp?agentId=4a70066d-6d58-4cdb-a775-ce79e2f5b1df",
+      "enabled": true
+    }
+  ],
+  "tools": [],
+  "resources": [],
+  "prompts": [],
+  "claims": [
+    "$.mcpServers.rippletide.type=http",
+    "$.mcpServers.rippletide.url=https://mcp.rippletide.com/mcp?agentId=4a70066d-6d58-4cdb-a775-ce79e2f5b1df",
+    "server rippletide locator https://mcp.rippletide.com/mcp?agentId=4a70066d-6d58-4cdb-a775-ce79e2f5b1df",
+    "server rippletide transport http"
+  ],
+  "provenance": {
+    "has_servers": true,
+    "claim_count": 4
+  },
+  "raw_config": {
+    "mcpServers": {
+      "rippletide": {
+        "type": "http",
+        "url": "https://mcp.rippletide.com/mcp?agentId=4a70066d-6d58-4cdb-a775-ce79e2f5b1df"
+      }
+    }
+  }
+}

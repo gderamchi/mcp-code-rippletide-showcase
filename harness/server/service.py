@@ -32,8 +32,9 @@ from ..profiles import (
     resolve_instruction_sources,
     resolve_mcp_source,
 )
+from ..reporting import write_studio_run_report
 from ..rule_benchmark import build_precheck, compile_benchmark_rules, compile_rule_tasks, summarize_rule_benchmark
-from ..studio import probe_repo_capabilities
+from ..studio import build_dynamic_bundle, probe_repo_capabilities
 from ..studio_models import DynamicRunBundle, studio_jsonable
 
 
@@ -289,6 +290,7 @@ class StudioRunManager:
             mcp_source_command=mcp_source_command,
         )
         manifest = McpManifestCompiler().compile(resolved_mcp_source.raw_config)
+        alignment = RuleAlignmentEngine().align(compiled, manifest)
         capabilities = probe_repo_capabilities(source_root)
         benchmark_rules = compile_benchmark_rules(compiled)
         live_source_config = None
@@ -311,14 +313,39 @@ class StudioRunManager:
             source_root=source_root,
         )
         rule_tasks = compile_rule_tasks(run_root / 'bundle', benchmark_rules, capabilities)
+        inputs = {
+            'profile_id': profile.id if profile is not None else None,
+            'profile_name': profile.name if profile is not None else None,
+            'repo_path': str(source_root),
+            'runner_kind': resolved_runner_kind,
+            'agent_backend': resolved_agent_backend,
+            'adapter_command': resolved_adapter_command,
+            'instruction_sources': instruction_metadata,
+            'mcp_source_type': resolved_mcp_source.type,
+            'mcp_source_origin': resolved_mcp_source.provenance.get('origin'),
+        }
+        bundle = build_dynamic_bundle(
+            bundle_root=run_root / 'bundle',
+            source_root=source_root,
+            inputs=inputs,
+            compiled_instructions=compiled,
+            mcp_manifest=manifest,
+            alignment_issues=alignment,
+            capabilities=capabilities,
+        )
+        bundle.benchmark_rules = benchmark_rules
+        bundle.precheck = precheck
+        bundle.rule_tasks = rule_tasks
         return {
             'run_root': run_root,
             'profile': profile,
             'source_root': source_root,
+            'bundle': bundle,
             'compiled_instructions': compiled,
             'instruction_metadata': instruction_metadata,
             'resolved_mcp_source': resolved_mcp_source,
             'manifest': manifest,
+            'alignment': alignment,
             'capabilities': capabilities,
             'benchmark_rules': benchmark_rules,
             'precheck': precheck,
@@ -425,6 +452,8 @@ class StudioRunManager:
             runnable_tasks = [item.task for item in bundle.generated_tasks if item.task is not None]
             if not runnable_tasks:
                 state.summary = self._build_summary(bundle, [])
+                (state.root / 'summary.json').write_text(json.dumps(state.summary, indent=2))
+                write_studio_run_report(state.root, state.summary, bundle=bundle)
                 self._set_status(state, 'completed')
                 return
 
@@ -481,6 +510,7 @@ class StudioRunManager:
             bundle.run_summaries = summaries
             state.summary = self._build_summary(bundle, summaries)
             (state.root / 'summary.json').write_text(json.dumps(state.summary, indent=2))
+            write_studio_run_report(state.root, state.summary, bundle=bundle)
             self._set_status(state, 'completed')
         except Exception as exc:  # pragma: no cover - exercised via integration tests
             state.error = str(exc)
@@ -513,6 +543,7 @@ class StudioRunManager:
             profile = context['profile']
             compiled = context['compiled_instructions']
             manifest = context['manifest']
+            bundle = context['bundle']
             capabilities = context['capabilities']
             precheck = context['precheck']
             rule_tasks = context['rule_tasks']
@@ -524,29 +555,9 @@ class StudioRunManager:
             instruction_metadata = context['instruction_metadata']
 
             self._set_status(state, 'benchmark_running')
-            bundle = DynamicRunBundle(
-                bundle_root=run_root / 'bundle',
-                source_root=source_root,
-                inputs={
-                    'profile_id': profile.id if profile is not None else None,
-                    'profile_name': profile.name if profile is not None else None,
-                    'repo_path': str(source_root),
-                    'runner_kind': runner_kind,
-                    'agent_backend': agent_backend,
-                    'adapter_command': adapter_command,
-                    'instruction_sources': instruction_metadata,
-                    'mcp_source_type': resolved_mcp_source.type,
-                    'mcp_source_origin': resolved_mcp_source.provenance.get('origin'),
-                },
-                compiled_instructions=compiled,
-                mcp_manifest=manifest,
-                alignment_issues=[],
-                capabilities=capabilities,
-                generated_tasks=[],
-                benchmark_rules=precheck.rules,
-                precheck=precheck,
-                rule_tasks=rule_tasks,
-            )
+            bundle.benchmark_rules = precheck.rules
+            bundle.precheck = precheck
+            bundle.rule_tasks = rule_tasks
             self._append_event(
                 state,
                 'precheck_ready',
@@ -647,6 +658,7 @@ class StudioRunManager:
                 'runs': summaries,
             }
             (run_root / 'summary.json').write_text(json.dumps(state.summary, indent=2))
+            write_studio_run_report(run_root, state.summary, bundle=bundle)
             self._set_status(state, 'completed')
         except Exception as exc:  # pragma: no cover - exercised via integration tests
             state.error = str(exc)

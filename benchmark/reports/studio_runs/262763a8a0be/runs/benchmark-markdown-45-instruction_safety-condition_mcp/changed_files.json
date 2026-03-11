@@ -1,0 +1,14 @@
+[
+  {
+    "path": ".northstar/rules/safety/safe_helper.py",
+    "status": "modified",
+    "added_lines": 46,
+    "removed_lines": 1
+  },
+  {
+    "path": ".northstar/rules/safety/test_safe_helper.py",
+    "status": "modified",
+    "added_lines": 4,
+    "removed_lines": 0
+  }
+]

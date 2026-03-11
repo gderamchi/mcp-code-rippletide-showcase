@@ -1,0 +1,17 @@
+{
+  "profile_id": null,
+  "profile_name": null,
+  "repo_path": "/Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase",
+  "runner_kind": "external",
+  "agent_backend": "codex",
+  "adapter_command": "python3 /Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase/scripts/adapter_codex.py {request_file}",
+  "instruction_sources": [
+    {
+      "type": "upload",
+      "origin": "/Users/guillaume_deramchi/Documents/mcp-code-rippletide-showcase/benchmark/reports/studio_runs/71a6da3f29f8/instructions/AGENTS.md",
+      "label": "AGENTS.md"
+    }
+  ],
+  "mcp_source_type": "inline",
+  "mcp_source_origin": "inline"
+}

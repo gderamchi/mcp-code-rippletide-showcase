@@ -1,0 +1,101 @@
+[
+  {
+    "rule_id": "markdown-1",
+    "status": "matched",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.benchmarkClaims[0]=Validate before concluding."
+    ],
+    "explanation": "Instruction rule is represented by the MCP manifest."
+  },
+  {
+    "rule_id": "markdown-2",
+    "status": "matched",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.benchmarkClaims[1]=Make the smallest safe change."
+    ],
+    "explanation": "Instruction rule is represented by the MCP manifest."
+  },
+  {
+    "rule_id": "markdown-3",
+    "status": "matched",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.benchmarkClaims[2]=Explore the repository before editing."
+    ],
+    "explanation": "Instruction rule is represented by the MCP manifest."
+  },
+  {
+    "rule_id": "markdown-4",
+    "status": "matched",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.benchmarkClaims[3]=Do not overwrite user changes."
+    ],
+    "explanation": "Instruction rule is represented by the MCP manifest."
+  },
+  {
+    "rule_id": "extra:5",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.local_demo.enabled=True"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:6",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.local_demo.tools[0].name=validate before concluding"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:7",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.local_demo.tools[1].name=make the smallest safe change"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:8",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.local_demo.tools[2].name=explore the repository before editing"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:9",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.local_demo.tools[3].name=do not overwrite user changes"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:10",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.local_demo.type=inline"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:11",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "server local_demo transport inline"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  }
+]

@@ -1,0 +1,27 @@
+{
+  "sources": [
+    {
+      "path": "AGENTS.md",
+      "content": "Validate before concluding.\n",
+      "source_kind": "agents"
+    }
+  ],
+  "rules": [
+    {
+      "id": "agents-1",
+      "source_kind": "agents",
+      "source_file": "AGENTS.md",
+      "scope_path": "/",
+      "category": "validation",
+      "requirement_level": "hard",
+      "normalized_claim": "validate before conclude",
+      "raw_text": "Validate before concluding.",
+      "confidence": 0.99,
+      "enforceability": "high"
+    }
+  ],
+  "conflicts": [],
+  "shadowed_rules": [],
+  "low_confidence_rules": [],
+  "extraction_mode": "codex"
+}

@@ -1,7 +1,7 @@
 {
   "id": "quick-demo",
   "name": "Quick demo",
-  "description": "Fastest path for testing the included benchmark repo after cloning.",
+  "description": "Deterministic local smoke test for the included benchmark repo.",
   "target_mode": "included",
   "execution_preset": "demo",
   "instruction_sources": [
@@ -13,9 +13,9 @@
   ],
   "mcp_source": {
     "type": "file",
-    "path": "benchmark/profiles/mcp/rippletide.mcp.json"
+    "path": "benchmark/profiles/mcp/quick-demo.mcp.json"
   },
   "max_workers": 2,
   "tags": ["demo", "quickstart"],
-  "demo_rank": 20
+  "demo_rank": 200
 }

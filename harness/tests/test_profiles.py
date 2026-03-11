@@ -26,6 +26,7 @@ def test_profiles_are_discoverable_from_repo() -> None:
     profile_ids = {profile.id for profile in profiles}
 
     assert {'quick-demo', 'anthropic-demo'} <= profile_ids
+    assert profiles[0].id == 'quick-demo'
 
 
 def test_load_profile_reads_committed_profile() -> None:
@@ -34,6 +35,13 @@ def test_load_profile_reads_committed_profile() -> None:
     assert profile.execution_preset == 'claude'
     assert profile.mcp_source.type == 'file'
     assert profile.instruction_sources
+
+
+def test_quick_demo_uses_local_demo_manifest() -> None:
+    profile = load_profile(REPO_ROOT, 'quick-demo')
+
+    assert profile.execution_preset == 'demo'
+    assert profile.mcp_source.path == 'benchmark/profiles/mcp/quick-demo.mcp.json'
 
 
 def test_resolve_instruction_sources_supports_repo_file_and_inline() -> None:

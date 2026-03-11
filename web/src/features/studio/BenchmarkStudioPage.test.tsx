@@ -66,9 +66,23 @@ function buildProfiles() {
   return {
     profiles: [
       {
+        id: 'quick-demo',
+        name: 'Quick demo',
+        description: 'Deterministic local smoke test for the included benchmark repo.',
+        target_mode: 'included',
+        execution_preset: 'demo',
+        instruction_sources: [],
+        mcp_source: {
+          type: 'file',
+          path: 'benchmark/profiles/mcp/quick-demo.mcp.json',
+        },
+        max_workers: 2,
+        proof_run: null,
+      },
+      {
         id: 'anthropic-demo',
         name: 'Anthropic demo',
-        description: 'Included repo plus Claude Code and the shared rippletide MCP profile.',
+        description: 'External-agent benchmark using Claude Code and the shared rippletide MCP profile.',
         target_mode: 'included',
         execution_preset: 'claude',
         instruction_sources: [
@@ -89,40 +103,26 @@ function buildProfiles() {
           mcp_summary: { adherence_rate: 0.85 },
         },
       },
-      {
-        id: 'quick-demo',
-        name: 'Quick demo',
-        description: 'Fastest path for testing the included benchmark repo after cloning.',
-        target_mode: 'included',
-        execution_preset: 'demo',
-        instruction_sources: [],
-        mcp_source: {
-          type: 'file',
-          path: 'benchmark/profiles/mcp/rippletide.mcp.json',
-        },
-        max_workers: 2,
-        proof_run: null,
-      },
     ],
   };
 }
 
 function buildPrecheckResponse(overrides: Partial<Record<string, unknown>> = {}) {
   return {
-    profile_id: 'anthropic-demo',
-    profile_name: 'Anthropic demo',
+    profile_id: 'quick-demo',
+    profile_name: 'Quick demo',
     source_root: '/tmp/repo',
-    runner_kind: 'external',
-    agent_backend: 'claude',
+    runner_kind: 'demo',
+    agent_backend: 'codex',
     instruction_sources: [
       {
         type: 'repo_file',
-        origin: 'benchmark/profiles/prompts/studio-anthropic.md',
-        label: 'Anthropic demo prompt',
+        origin: 'benchmark/profiles/prompts/studio-default.md',
+        label: 'Default studio prompt',
       },
     ],
     mcp_source_type: 'file',
-    mcp_source_origin: 'benchmark/profiles/mcp/rippletide.mcp.json',
+    mcp_source_origin: 'benchmark/profiles/mcp/quick-demo.mcp.json',
     capabilities: {
       supported: true,
       support_reason: 'Detected a pytest-compatible repository.',
@@ -170,9 +170,9 @@ function buildBenchmarkSummary() {
     run_id: 'run-123',
     status: 'completed',
     inputs: {
-      profile_id: 'anthropic-demo',
-      profile_name: 'Anthropic demo',
-      agent_backend: 'claude',
+      profile_id: 'quick-demo',
+      profile_name: 'Quick demo',
+      agent_backend: 'codex',
       mcp_source_type: 'file',
     },
     md_summary: {
@@ -255,7 +255,11 @@ describe('BenchmarkStudioPage', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/profiles');
     });
 
+    expect(screen.getByText(/quick demo is the recommended local smoke test/i)).toBeInTheDocument();
+    expect(screen.getByText(/deterministic local smoke test/i)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /run precheck/i })[0]).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: /anthropic demo/i }));
     expect(screen.getByRole('link', { name: /export proof run/i })).toHaveAttribute(
       'href',
       '/api/runs/15ddae9ccd6e/export'
@@ -280,7 +284,9 @@ describe('BenchmarkStudioPage', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/profiles');
     });
 
-    await user.click(screen.getAllByRole('button', { name: /^run precheck$/i })[0]);
+    await user.click(screen.getByText(/instruction and mcp overrides/i));
+    await user.type(screen.getByLabelText(/instruction markdown/i), 'Validate before concluding.');
+    await user.click(screen.getAllByRole('button', { name: /^run precheck$/i })[1]);
 
     await waitFor(() => {
       expect(
@@ -291,6 +297,10 @@ describe('BenchmarkStudioPage', () => {
         )
       ).toBe(true);
     });
+    const precheckCall = fetchMock.mock.calls.find((call) => call[0] === '/api/precheck');
+    const formData = precheckCall?.[1] && (precheckCall[1] as { body?: FormData }).body;
+    expect(formData).toBeInstanceOf(FormData);
+    expect(formData?.getAll('instruction_files')).toHaveLength(1);
     expect(screen.getByText(/the mcp coverage is good enough to benchmark without confirmation/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /launch benchmark/i }));
@@ -323,5 +333,63 @@ describe('BenchmarkStudioPage', () => {
       expect(screen.getAllByText(/88%/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/benchmark-agents-1/i).length).toBeGreaterThan(0);
     });
+  });
+
+  it('uses the agent catalog for execution cards and disables unavailable agents', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          default_external_agent: 'codex',
+          agents: [
+            {
+              key: 'codex',
+              label: 'Codex',
+              description: 'OpenAI Codex CLI benchmark adapter.',
+              available: true,
+              authenticated: true,
+              default_for_external: true,
+              command_preview: null,
+              auth_message: 'Logged in using ChatGPT',
+              requires_custom_command: false,
+            },
+            {
+              key: 'claude',
+              label: 'Claude Code',
+              description: 'Anthropic Claude Code CLI benchmark adapter.',
+              available: true,
+              authenticated: false,
+              default_for_external: false,
+              command_preview: null,
+              auth_message: 'Claude login required',
+              requires_custom_command: false,
+            },
+            {
+              key: 'custom',
+              label: 'Custom command',
+              description: 'Any adapter command that implements the benchmark NDJSON contract.',
+              available: true,
+              authenticated: false,
+              default_for_external: false,
+              command_preview: null,
+              auth_message: 'Provide a full adapter command.',
+              requires_custom_command: true,
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => buildProfiles() });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<BenchmarkStudioPage />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/profiles');
+    });
+
+    expect(screen.getAllByRole('button', { name: /claude code/i })[1]).toBeDisabled();
+    expect(screen.getByText(/claude login required/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /custom command/i })).toBeEnabled();
   });
 });

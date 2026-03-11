@@ -13,6 +13,18 @@ function getBaseUrl(): string {
   return typeof baseUrl === 'string' && baseUrl.length > 0 ? baseUrl : '';
 }
 
+function appendInstructionSources(formData: FormData, input: CreateStudioRunInput): void {
+  if (input.instructionMarkdown.trim()) {
+    formData.append(
+      'instruction_files',
+      new File([input.instructionMarkdown], 'pasted-instructions.md', { type: 'text/markdown' })
+    );
+  }
+  input.instructionFiles.forEach((file) => {
+    formData.append('instruction_files', file);
+  });
+}
+
 export async function createStudioRun(
   input: CreateStudioRunInput
 ): Promise<CreateStudioRunResponse> {
@@ -26,9 +38,7 @@ export async function createStudioRun(
   if (input.repoArchive) {
     formData.set('repo_archive', input.repoArchive);
   }
-  input.instructionFiles.forEach((file) => {
-    formData.append('instruction_files', file);
-  });
+  appendInstructionSources(formData, input);
   formData.set('mcp_json', input.mcpJson);
   if (input.mcpSourceType) {
     formData.set('mcp_source_type', input.mcpSourceType);
@@ -77,9 +87,7 @@ function buildStudioFormData(input: CreateStudioRunInput, confirmedToContinue = 
   if (input.repoArchive) {
     formData.set('repo_archive', input.repoArchive);
   }
-  input.instructionFiles.forEach((file) => {
-    formData.append('instruction_files', file);
-  });
+  appendInstructionSources(formData, input);
   formData.set('mcp_json', input.mcpJson);
   if (input.mcpSourceType) {
     formData.set('mcp_source_type', input.mcpSourceType);

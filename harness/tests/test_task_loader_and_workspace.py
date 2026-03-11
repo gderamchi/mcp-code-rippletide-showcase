@@ -17,4 +17,4 @@ def test_workspace_applies_setup_and_user_change_patches() -> None:
     assert "Order,Client,Category,State,Owner,Amount" in export_file.read_text()
     assert 'User note: keep the noon carrier handoff note intact.' in orders_page.read_text()
     assert 'web/src/features/orders/OrdersPage.tsx' in workspace.user_change_paths
-
+    assert not (workspace.root / 'benchmark/reports').exists()

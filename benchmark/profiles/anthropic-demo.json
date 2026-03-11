@@ -1,7 +1,7 @@
 {
   "id": "anthropic-demo",
   "name": "Anthropic demo",
-  "description": "Included repo plus Claude Code and the shared rippletide MCP profile.",
+  "description": "External-agent benchmark using Claude Code and the shared rippletide MCP profile.",
   "target_mode": "included",
   "execution_preset": "claude",
   "instruction_sources": [

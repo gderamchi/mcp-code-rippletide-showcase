@@ -77,7 +77,9 @@ Use this for repeatable benchmarks.
 Steps:
 
 1. Open `/studio`
-2. Pick a saved profile such as `Anthropic demo` or `Quick demo`
+2. Pick a saved profile.
+   - `Quick demo` is the recommended deterministic local smoke test.
+   - `Anthropic demo` is an external-agent run that depends on CLI auth and the shared rippletide MCP.
 3. Click `Run precheck`
 4. Review the precheck:
    - total rules
@@ -190,6 +192,7 @@ Use this for:
 Example profile-backed MCP file:
 
 - `benchmark/profiles/mcp/rippletide.mcp.json`
+- `benchmark/profiles/mcp/quick-demo.mcp.json`
 
 ### `command`
 
@@ -230,6 +233,12 @@ A profile contains:
 - tags / demo rank
 
 Profiles are the recommended way to run repeated benchmarks.
+
+For local validation from the repo root, use:
+
+```bash
+pnpm web:test -- --run
+```
 
 ## Built-In Agents
 

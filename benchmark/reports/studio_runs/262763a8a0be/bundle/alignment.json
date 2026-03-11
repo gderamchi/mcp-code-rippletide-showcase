@@ -1,0 +1,262 @@
+[
+  {
+    "rule_id": "markdown-3",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-4",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-5",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-6",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-7",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-11",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-13",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-14",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-15",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-17",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-19",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-20",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-21",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-22",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-23",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-27",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-28",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-29",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-33",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-34",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-35",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-36",
+    "status": "missing_in_mcp",
+    "severity": "error",
+    "matched_claim_ids": [],
+    "explanation": "Instruction mentions MCP-facing capabilities that were not represented in the manifest snapshot."
+  },
+  {
+    "rule_id": "markdown-37",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-41",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-42",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-43",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-44",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-45",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-46",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-52",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-57",
+    "status": "unverifiable",
+    "severity": "warning",
+    "matched_claim_ids": [],
+    "explanation": "Rule could not be matched to a concrete MCP manifest claim."
+  },
+  {
+    "rule_id": "markdown-58",
+    "status": "missing_in_mcp",
+    "severity": "error",
+    "matched_claim_ids": [],
+    "explanation": "Instruction mentions MCP-facing capabilities that were not represented in the manifest snapshot."
+  },
+  {
+    "rule_id": "extra:33",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.rippletide.type=http"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:34",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.rippletide.url=https://mcp.rippletide.com/mcp?agentId=4a70066d-6d58-4cdb-a775-ce79e2f5b1df"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:35",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "server rippletide locator https://mcp.rippletide.com/mcp?agentId=4a70066d-6d58-4cdb-a775-ce79e2f5b1df"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:36",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "server rippletide transport http"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  }
+]

@@ -54,7 +54,20 @@ def _category_for_line(line: str) -> str:
         return 'tooling'
     if any(token in lowered for token in ('mcp', 'context graph', 'server', 'resource', 'prompt')):
         return 'mcp'
-    if any(token in lowered for token in ('smallest change', 'minimal', 'scope', 'focus')):
+    if any(
+        token in lowered
+        for token in (
+            'smallest change',
+            'smallest safe change',
+            'smallest',
+            'minimal',
+            'scope',
+            'focus',
+            'explore',
+            'repository',
+            'before editing',
+        )
+    ):
         return 'scope'
     if any(token in lowered for token in ('quality', 'robust', 'safe', 'correct')):
         return 'quality'
@@ -133,6 +146,11 @@ class InstructionCompiler:
                     'worktree',
                     'command',
                     'file',
+                    'smallest',
+                    'safe change',
+                    'explore',
+                    'repository',
+                    'before editing',
                 )
             ):
                 continue

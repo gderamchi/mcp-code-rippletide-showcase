@@ -64,6 +64,7 @@ def test_server_creates_run_and_exports_bundle(tmp_path: Path) -> None:
     assert status == 'completed', final_payload
     assert final_payload['summary']['runnable_task_count'] >= 1
     assert final_payload['summary']['inputs']['agent_backend'] == 'codex'
+    assert Path(final_payload['report_paths']['benchmark_report_markdown']).exists()
 
     export_response = client.get(f'/api/runs/{run_id}/export')
     assert export_response.status_code == 200
@@ -95,6 +96,7 @@ def test_server_can_run_against_the_included_repo_without_repo_path() -> None:
 
     assert final_payload['status'] == 'completed', final_payload
     assert final_payload['summary']['source_root']
+    assert Path(final_payload['report_paths']['benchmark_report_markdown']).exists()
 
 
 def test_server_can_load_and_run_a_profile() -> None:
@@ -119,3 +121,46 @@ def test_server_can_load_and_run_a_profile() -> None:
 
     assert final_payload['status'] == 'completed', final_payload
     assert final_payload['summary']['inputs']['profile_id'] == 'quick-demo'
+    assert Path(final_payload['report_paths']['benchmark_report_markdown']).exists()
+
+
+def test_benchmark_endpoint_materializes_bundle_files(tmp_path: Path) -> None:
+    repo_root = _create_pytest_repo(tmp_path)
+    client = TestClient(create_app())
+
+    response = client.post(
+        '/api/benchmark',
+        data={
+            'repo_path': str(repo_root),
+            'mcp_json': '{"mcpServers":{"local_demo":{"type":"inline","tools":[{"name":"validate before concluding"}]}}}',
+            'runner_kind': 'demo',
+            'agent_backend': 'codex',
+            'confirmed_to_continue': 'true',
+            'max_workers': '2',
+        },
+        files=[
+            (
+                'instruction_files',
+                (
+                    'AGENTS.md',
+                    io.BytesIO(b'Validate before concluding.\n'),
+                    'text/markdown',
+                ),
+            )
+        ],
+    )
+    assert response.status_code == 200
+    run_id = response.json()['run_id']
+
+    deadline = time.time() + 120
+    final_payload = {}
+    while time.time() < deadline:
+        final_payload = client.get(f'/api/runs/{run_id}').json()
+        if final_payload['status'] in {'completed', 'failed'}:
+            break
+        time.sleep(0.2)
+
+    assert final_payload['status'] == 'completed', final_payload
+    for path in final_payload['bundle_paths'].values():
+        assert Path(path).exists(), path
+    assert Path(final_payload['report_paths']['benchmark_report_markdown']).exists()

@@ -8,7 +8,7 @@
     "web:build": "pnpm --dir web build",
     "web:lint": "pnpm --dir web lint",
     "web:typecheck": "pnpm --dir web typecheck",
-    "web:test": "pnpm --dir web test --run",
+    "web:test": "pnpm --dir web test",
     "studio:start": ".venv/bin/python scripts/start_studio.py",
     "studio:server": ".venv/bin/python -m uvicorn harness.server.app:app --reload --port 8008",
     "studio:web": "pnpm --dir web dev",

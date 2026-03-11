@@ -1,0 +1,57 @@
+{
+  "servers": [
+    {
+      "id": "local_demo",
+      "transport": "inline",
+      "locator": "",
+      "enabled": true
+    }
+  ],
+  "tools": [
+    "local_demo:do not overwrite user changes",
+    "local_demo:explore the repository before editing",
+    "local_demo:make the smallest safe change",
+    "local_demo:validate before concluding"
+  ],
+  "resources": [],
+  "prompts": [],
+  "claims": [
+    "$.mcpServers.local_demo.enabled=True",
+    "$.mcpServers.local_demo.tools[0].name=validate before concluding",
+    "$.mcpServers.local_demo.tools[1].name=make the smallest safe change",
+    "$.mcpServers.local_demo.tools[2].name=explore the repository before editing",
+    "$.mcpServers.local_demo.tools[3].name=do not overwrite user changes",
+    "$.mcpServers.local_demo.type=inline",
+    "server local_demo transport inline",
+    "tool local_demo:do not overwrite user changes",
+    "tool local_demo:explore the repository before editing",
+    "tool local_demo:make the smallest safe change",
+    "tool local_demo:validate before concluding"
+  ],
+  "provenance": {
+    "has_servers": true,
+    "claim_count": 11
+  },
+  "raw_config": {
+    "mcpServers": {
+      "local_demo": {
+        "type": "inline",
+        "enabled": true,
+        "tools": [
+          {
+            "name": "validate before concluding"
+          },
+          {
+            "name": "make the smallest safe change"
+          },
+          {
+            "name": "explore the repository before editing"
+          },
+          {
+            "name": "do not overwrite user changes"
+          }
+        ]
+      }
+    }
+  }
+}

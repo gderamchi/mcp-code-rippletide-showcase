@@ -14,6 +14,7 @@ import {
 import type {
   AgentBackendStatus,
   BenchmarkPrecheckResponse,
+  BenchmarkRuleCoverageItem,
   CreateStudioRunInput,
   DemoProfileResponse,
   StudioEventEnvelope,
@@ -70,6 +71,10 @@ const FALLBACK_AGENTS: AgentBackendStatus[] = [
   },
 ];
 
+function isAgentSelectable(agent: AgentBackendStatus): boolean {
+  return agent.available && (agent.authenticated || agent.requires_custom_command);
+}
+
 function formatPercent(value: number | undefined): string {
   if (typeof value !== 'number') {
     return 'Pending';
@@ -81,6 +86,28 @@ function formatEventLabel(eventType: string): string {
   return eventType.replaceAll('_', ' ');
 }
 
+function formatDisplayLabel(value: string): string {
+  const normalized = value.replaceAll('_', ' ');
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function getCoverageStatusClass(
+  status: BenchmarkRuleCoverageItem['coverage']['status']
+): string {
+  switch (status) {
+    case 'covered':
+      return styles.statusCovered;
+    case 'missing':
+      return styles.statusMissing;
+    case 'ambiguous':
+      return styles.statusAmbiguous;
+    case 'not_applicable':
+      return styles.statusNeutral;
+    default:
+      return '';
+  }
+}
+
 function buildInputFromProfile(profile: DemoProfileResponse): CreateStudioRunInput {
   const mcpSourceType = profile.mcp_source.type;
   return {
@@ -88,6 +115,7 @@ function buildInputFromProfile(profile: DemoProfileResponse): CreateStudioRunInp
     repoPath: '',
     repoArchive: null,
     instructionFiles: [],
+    instructionMarkdown: '',
     mcpJson:
       mcpSourceType === 'inline'
         ? JSON.stringify(profile.mcp_source.content ?? {}, null, 2)
@@ -112,6 +140,7 @@ function buildInputFromCustom(
   repoPath: string,
   repoArchive: File | null,
   instructionFiles: File[],
+  instructionMarkdown: string,
   executionPreset: ExecutionPreset,
   mcpSourceType: McpSourceType,
   mcpJson: string,
@@ -125,6 +154,7 @@ function buildInputFromCustom(
     repoPath: targetMode === 'custom' ? repoPath : '',
     repoArchive: targetMode === 'custom' ? repoArchive : null,
     instructionFiles,
+    instructionMarkdown,
     mcpJson,
     mcpSourceType,
     mcpSourcePath: mcpFilePath,
@@ -149,6 +179,7 @@ export function BenchmarkStudioPage(): JSX.Element {
   const [repoPath, setRepoPath] = useState('');
   const [repoArchive, setRepoArchive] = useState<File | null>(null);
   const [instructionFiles, setInstructionFiles] = useState<File[]>([]);
+  const [instructionMarkdown, setInstructionMarkdown] = useState('');
   const [executionPreset, setExecutionPreset] = useState<ExecutionPreset>('demo');
   const [mcpSourceType, setMcpSourceType] = useState<McpSourceType>('inline');
   const [mcpJson, setMcpJson] = useState(DEFAULT_MCP_JSON);
@@ -170,6 +201,41 @@ export function BenchmarkStudioPage(): JSX.Element {
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
     [profiles, selectedProfileId]
   );
+  const agentByKey = useMemo(
+    () => new Map(agents.map((agent) => [agent.key, agent])),
+    [agents]
+  );
+  const executionOptions = useMemo(
+    () => [
+      {
+        key: 'demo' as const,
+        label: 'Demo',
+        description: 'Deterministic local runner for quick smoke tests.',
+        disabled: false,
+        helper: 'Recommended for the Quick demo profile.',
+        status: 'local',
+        requiresCustomCommand: false,
+      },
+      ...agents.map((agent) => ({
+        key: agent.key as ExecutionPreset,
+        label: agent.label,
+        description: agent.description,
+        disabled: !isAgentSelectable(agent),
+        helper: agent.auth_message,
+        status: agent.default_for_external ? 'default external' : agent.available ? 'external' : 'unavailable',
+        requiresCustomCommand: agent.requires_custom_command,
+      })),
+    ],
+    [agents]
+  );
+  const selectedExecutionOption =
+    executionOptions.find((option) => option.key === executionPreset) ?? executionOptions[0];
+  const selectedProfileAgent = useMemo(() => {
+    if (selectedProfile == null || selectedProfile.execution_preset === 'demo') {
+      return null;
+    }
+    return agentByKey.get(selectedProfile.execution_preset) ?? null;
+  }, [agentByKey, selectedProfile]);
 
   useEffect(() => {
     void getAgentCatalog()
@@ -187,7 +253,11 @@ export function BenchmarkStudioPage(): JSX.Element {
     void getBenchmarkProfiles()
       .then((payload) => {
         setProfiles(payload.profiles);
-        setSelectedProfileId(payload.profiles[0]?.id ?? null);
+        setSelectedProfileId(
+          payload.profiles.find((profile) => profile.id === 'quick-demo')?.id ??
+            payload.profiles[0]?.id ??
+            null
+        );
       })
       .catch((profilesLookupError) => {
         const message =
@@ -203,6 +273,12 @@ export function BenchmarkStudioPage(): JSX.Element {
       eventSourceRef.current?.close();
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedExecutionOption && selectedExecutionOption.disabled) {
+      setExecutionPreset('demo');
+    }
+  }, [selectedExecutionOption]);
 
   async function refreshRun(runIdentifier: string): Promise<void> {
     const details = await getStudioRun(runIdentifier);
@@ -326,6 +402,7 @@ export function BenchmarkStudioPage(): JSX.Element {
     repoPath,
     repoArchive,
     instructionFiles,
+    instructionMarkdown,
     executionPreset,
     mcpSourceType,
     mcpJson,
@@ -344,6 +421,10 @@ export function BenchmarkStudioPage(): JSX.Element {
           <p className={styles.copy}>
             The benchmark now has two stages: precheck the MCP against the MD, then run the full
             `MD vs MCP` rule-adherence matrix in parallel.
+          </p>
+          <p className={styles.helper}>
+            Quick demo is the recommended local smoke test. Anthropic demo exercises a real external
+            agent and the shared rippletide MCP.
           </p>
         </div>
 
@@ -380,11 +461,23 @@ export function BenchmarkStudioPage(): JSX.Element {
               <dl className={styles.definitionList}>
                 <div>
                   <dt>Execution</dt>
-                  <dd>{selectedProfile.execution_preset}</dd>
+                  <dd>
+                    {selectedProfile.execution_preset === 'demo'
+                      ? 'local smoke test'
+                      : selectedProfile.execution_preset}
+                  </dd>
                 </div>
                 <div>
                   <dt>Target</dt>
                   <dd>{selectedProfile.target_mode}</dd>
+                </div>
+                <div>
+                  <dt>Runtime status</dt>
+                  <dd>
+                    {selectedProfile.execution_preset === 'demo'
+                      ? 'Deterministic local runner.'
+                      : selectedProfileAgent?.auth_message ?? 'Agent status unavailable.'}
+                  </dd>
                 </div>
                 <div>
                   <dt>Instruction sources</dt>
@@ -422,17 +515,17 @@ export function BenchmarkStudioPage(): JSX.Element {
             <span className={styles.sectionEyebrow}>Proof run</span>
             {selectedProfileProofRun ? (
               <div className={styles.metricStack}>
-                <div>
+                <div className={styles.metricCard}>
                   <span className={styles.metricLabel}>Run id</span>
-                  <strong>{selectedProfileProofRun.run_id}</strong>
+                  <strong className={styles.metricValue}>{selectedProfileProofRun.run_id}</strong>
                 </div>
-                <div>
+                <div className={styles.metricCard}>
                   <span className={styles.metricLabel}>MD score</span>
-                  <strong>{formatPercent(selectedProfileProofMdRate)}</strong>
+                  <strong className={styles.metricValue}>{formatPercent(selectedProfileProofMdRate)}</strong>
                 </div>
-                <div>
+                <div className={styles.metricCard}>
                   <span className={styles.metricLabel}>MCP score</span>
-                  <strong>{formatPercent(selectedProfileProofMcpRate)}</strong>
+                  <strong className={styles.metricValue}>{formatPercent(selectedProfileProofMcpRate)}</strong>
                 </div>
               </div>
             ) : (
@@ -537,24 +630,31 @@ export function BenchmarkStudioPage(): JSX.Element {
 
           <div className={styles.sectionBlock}>
             <div className={styles.choiceGrid}>
-              {(['demo', 'codex', 'claude', 'custom'] as ExecutionPreset[]).map((preset) => (
+              {executionOptions.map((option) => (
                 <button
-                  key={preset}
+                  key={option.key}
                   type="button"
                   className={[
                     styles.choiceCard,
-                    executionPreset === preset ? styles.choiceCardSelected : '',
+                    executionPreset === option.key ? styles.choiceCardSelected : '',
+                    option.disabled ? styles.choiceCardDisabled : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
-                  onClick={() => setExecutionPreset(preset)}
+                  disabled={option.disabled}
+                  onClick={() => setExecutionPreset(option.key)}
                 >
-                  <strong>{preset}</strong>
+                  <div className={styles.choiceHeader}>
+                    <strong>{option.label}</strong>
+                    <span className={styles.choiceStatus}>{option.status}</span>
+                  </div>
+                  <p className={styles.choiceDescription}>{option.description}</p>
+                  <p className={styles.choiceMeta}>{option.helper}</p>
                 </button>
               ))}
             </div>
 
-            {executionPreset === 'custom' ? (
+            {selectedExecutionOption?.requiresCustomCommand ? (
               <label className={styles.field}>
                 <span className={styles.label}>Custom adapter command</span>
                 <input
@@ -569,6 +669,19 @@ export function BenchmarkStudioPage(): JSX.Element {
           <details className={styles.advancedPanel}>
             <summary className={styles.advancedSummary}>Instruction and MCP overrides</summary>
             <div className={styles.stackFields}>
+              <label className={styles.field}>
+                <span className={styles.label}>Instruction markdown</span>
+                <textarea
+                  className={styles.textarea}
+                  rows={8}
+                  placeholder="Paste your .md instructions directly here. The Studio will send them as a temporary markdown source."
+                  value={instructionMarkdown}
+                  onChange={(event) => setInstructionMarkdown(event.target.value)}
+                />
+                <span className={styles.helper}>
+                  Paste your `.md` directly here if you do not want to upload a local file.
+                </span>
+              </label>
               <label className={styles.field}>
                 <span className={styles.label}>Instruction files</span>
                 <input
@@ -651,23 +764,40 @@ export function BenchmarkStudioPage(): JSX.Element {
             <h3 className={styles.sectionTitle}>Precheck result</h3>
           </div>
           <div className={styles.metricStack}>
-            <div>
+            <div className={styles.metricCard}>
               <span className={styles.metricLabel}>Total rules</span>
-              <strong>{precheckResult.precheck.total_rules}</strong>
+              <strong className={styles.metricValue}>{precheckResult.precheck.total_rules}</strong>
             </div>
-            <div>
+            <div className={styles.metricCard}>
               <span className={styles.metricLabel}>Covered by MCP</span>
-              <strong>{precheckResult.precheck.covered_rules}</strong>
+              <strong className={styles.metricValue}>{precheckResult.precheck.covered_rules}</strong>
             </div>
-            <div>
+            <div className={styles.metricCard}>
               <span className={styles.metricLabel}>Missing in MCP</span>
-              <strong>{precheckResult.precheck.missing_rules}</strong>
+              <strong className={styles.metricValue}>{precheckResult.precheck.missing_rules}</strong>
             </div>
-            <div>
+            <div className={styles.metricCard}>
               <span className={styles.metricLabel}>Ambiguous</span>
-              <strong>{precheckResult.precheck.ambiguous_rules}</strong>
+              <strong className={styles.metricValue}>{precheckResult.precheck.ambiguous_rules}</strong>
             </div>
           </div>
+
+          <div className={styles.summaryRow}>
+            <span className={styles.summaryPill}>
+              Benchmarkable {precheckResult.precheck.benchmarkable_rules}
+            </span>
+            <span className={styles.summaryPill}>
+              Excluded {precheckResult.precheck.excluded_rules}
+            </span>
+            <span className={styles.summaryPill}>
+              Language {precheckResult.capabilities.language ?? 'Unknown'}
+            </span>
+            <span className={styles.summaryPill}>
+              Runner {precheckResult.capabilities.test_runner ?? 'Undetected'}
+            </span>
+          </div>
+
+          <p className={styles.metricMeta}>{precheckResult.capabilities.support_reason}</p>
 
           {requiresConfirmation ? (
             <InlineNotice tone="error">
@@ -694,18 +824,47 @@ export function BenchmarkStudioPage(): JSX.Element {
             )}
           </div>
 
-          <div className={styles.eventList}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionEyebrow}>Rule coverage</span>
+            <h4 className={styles.subTitle}>Each markdown rule mapped against the MCP manifest</h4>
+          </div>
+
+          <div className={styles.ruleList}>
             {precheckResult.precheck.rules.map((rule) => (
-              <div key={rule.rule_id} className={styles.eventItem}>
-                <div className={styles.eventMeta}>
-                  <span>{rule.rule_id}</span>
-                  <span>{rule.coverage.status}</span>
+              <article key={rule.rule_id} className={styles.ruleItem}>
+                <div className={styles.ruleHeader}>
+                  <div className={styles.ruleIdentity}>
+                    <span className={styles.ruleId}>{rule.rule_id}</span>
+                    <div className={styles.ruleMetaRow}>
+                      <span className={styles.ruleChip}>{formatDisplayLabel(rule.category)}</span>
+                      <span className={styles.ruleChip}>{formatDisplayLabel(rule.severity)}</span>
+                      <span className={styles.ruleChip}>
+                        {formatDisplayLabel(rule.coverage.evidence_source)}
+                      </span>
+                    </div>
+                  </div>
+                  <span
+                    className={[
+                      styles.statusBadge,
+                      getCoverageStatusClass(rule.coverage.status),
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    {formatDisplayLabel(rule.coverage.status)}
+                  </span>
                 </div>
-                <div>{rule.raw_text}</div>
-                <div className={styles.choiceMeta}>
-                  {rule.coverage.evidence_source} · {rule.coverage.explanation}
+                <p className={styles.ruleStatement}>{rule.raw_text}</p>
+                <div className={styles.ruleFooter}>
+                  <span className={styles.ruleEvidence}>{rule.coverage.explanation}</span>
+                  <span className={styles.ruleSource}>
+                    Source {rule.source_file}
+                    {rule.benchmark_family
+                      ? ` · Family ${formatDisplayLabel(rule.benchmark_family)}`
+                      : ''}
+                  </span>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         </Card>
@@ -719,17 +878,23 @@ export function BenchmarkStudioPage(): JSX.Element {
           </div>
 
           <div className={styles.metricStack}>
-            <div>
+            <div className={styles.metricCard}>
               <span className={styles.metricLabel}>MD adherence</span>
-              <strong>{formatPercent(runSummary.md_summary.adherence_rate)}</strong>
+              <strong className={styles.metricValue}>
+                {formatPercent(runSummary.md_summary.adherence_rate)}
+              </strong>
             </div>
-            <div>
+            <div className={styles.metricCard}>
               <span className={styles.metricLabel}>MCP adherence</span>
-              <strong>{formatPercent(runSummary.mcp_summary.adherence_rate)}</strong>
+              <strong className={styles.metricValue}>
+                {formatPercent(runSummary.mcp_summary.adherence_rate)}
+              </strong>
             </div>
-            <div>
+            <div className={styles.metricCard}>
               <span className={styles.metricLabel}>Runtime</span>
-              <strong>{Math.round((runSummary.benchmark_runtime_ms ?? 0) / 1000)}s</strong>
+              <strong className={styles.metricValue}>
+                {Math.round((runSummary.benchmark_runtime_ms ?? 0) / 1000)}s
+              </strong>
             </div>
           </div>
 

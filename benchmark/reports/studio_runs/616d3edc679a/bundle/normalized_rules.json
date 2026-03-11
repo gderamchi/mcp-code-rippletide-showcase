@@ -1,0 +1,29 @@
+{
+  "sources": [
+    {
+      "path": "northstar-audit-XXXX.md",
+      "content": "Validate before concluding.\n",
+      "source_kind": "markdown"
+    }
+  ],
+  "rules": [
+    {
+      "id": "markdown-1",
+      "source_kind": "markdown",
+      "source_file": "northstar-audit-XXXX.md",
+      "scope_path": "/",
+      "category": "validation",
+      "requirement_level": "informational",
+      "normalized_claim": "validate before concluding.",
+      "raw_text": "Validate before concluding.",
+      "confidence": 0.58,
+      "enforceability": "high"
+    }
+  ],
+  "conflicts": [],
+  "shadowed_rules": [],
+  "low_confidence_rules": [
+    "markdown-1"
+  ],
+  "extraction_mode": "deterministic"
+}

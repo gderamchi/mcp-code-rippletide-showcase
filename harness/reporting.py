@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import ChangedFile, RunRequest, RunResult, ScoreSummary, ScoringContext, TaskSpec, ValidationResult
+from .studio_models import DynamicRunBundle
 from .task_loader import load_policy, load_task
 from .scoring import load_allowed_scripts, load_rulebook
 from .detectors import RULE_DETECTORS
@@ -110,6 +111,271 @@ def build_run_html(markdown_report: str) -> str:
   </body>
 </html>
 """
+
+
+def write_studio_run_report(
+    run_root: Path,
+    summary: dict[str, Any],
+    *,
+    bundle: DynamicRunBundle | None = None,
+) -> Path:
+    report_path = run_root / 'benchmark_report.md'
+    report_path.write_text(
+        build_studio_run_markdown(
+            summary=summary,
+            run_root=run_root,
+            bundle=bundle,
+            studio_events=load_studio_events(run_root / 'studio_events.jsonl'),
+        )
+    )
+    return report_path
+
+
+def load_studio_events(events_path: Path) -> list[dict[str, Any]]:
+    if not events_path.exists():
+        return []
+    return [json.loads(line) for line in events_path.read_text().splitlines() if line.strip()]
+
+
+def build_studio_run_markdown(
+    *,
+    summary: dict[str, Any],
+    run_root: Path,
+    bundle: DynamicRunBundle | None,
+    studio_events: list[dict[str, Any]],
+) -> str:
+    inputs = summary.get('inputs') or {}
+    capabilities = summary.get('capabilities') or {}
+    lines = [f"# Studio Benchmark Report: {summary['run_id']}", '']
+    lines.extend(
+        [
+            '## Overview',
+            '',
+            f"- Status: `{summary.get('status', 'unknown')}`",
+            f"- Source root: `{summary.get('source_root', 'n/a')}`",
+            f"- Profile: `{inputs.get('profile_name') or inputs.get('profile_id') or 'custom'}`",
+            f"- Runner: `{inputs.get('runner_kind', 'unknown')}`",
+            f"- Agent backend: `{inputs.get('agent_backend', 'unknown')}`",
+            f"- MCP source: `{inputs.get('mcp_source_type', 'unknown')}`",
+            f"- Repository support: `{capabilities.get('supported', False)}` ({capabilities.get('support_reason', 'n/a')})",
+        ]
+    )
+    if 'benchmark_runtime_ms' in summary:
+        lines.append(f"- Benchmark runtime: `{summary['benchmark_runtime_ms']} ms`")
+    if summary.get('runnable_task_count') is not None:
+        lines.append(f"- Runnable task count: `{summary['runnable_task_count']}`")
+    if bundle is not None:
+        lines.append(f"- Instruction extraction mode: `{bundle.compiled_instructions.extraction_mode}`")
+        lines.append(f"- Alignment issues: `{len(bundle.alignment_issues)}`")
+    lines.append('')
+
+    if bundle is not None:
+        lines.extend(['## Instruction Sources', ''])
+        if bundle.compiled_instructions.sources:
+            for source in bundle.compiled_instructions.sources:
+                lines.append(f"- `{source.path}` ({source.source_kind})")
+        else:
+            lines.append('- No instruction sources recorded.')
+        lines.append('')
+
+        lines.extend(['## Extraction Details', ''])
+        if bundle.compiled_instructions.conflicts:
+            lines.append('Conflicts:')
+            for conflict in bundle.compiled_instructions.conflicts:
+                lines.append(f"- `{', '.join(conflict.rule_ids)}`: {conflict.reason}")
+        else:
+            lines.append('- No extraction conflicts.')
+        if bundle.compiled_instructions.shadowed_rules:
+            lines.append(f"- Shadowed rules: `{', '.join(bundle.compiled_instructions.shadowed_rules)}`")
+        if bundle.compiled_instructions.low_confidence_rules:
+            lines.append(
+                f"- Low-confidence rules: `{', '.join(bundle.compiled_instructions.low_confidence_rules)}`"
+            )
+        if (
+            not bundle.compiled_instructions.shadowed_rules
+            and not bundle.compiled_instructions.low_confidence_rules
+        ):
+            lines.append('- No shadowed or low-confidence rules.')
+        lines.append('')
+
+        lines.extend(['## MCP Manifest', ''])
+        if bundle.mcp_manifest.servers:
+            for server in bundle.mcp_manifest.servers:
+                lines.append(
+                    f"- Server `{server.id}` transport=`{server.transport}` enabled=`{server.enabled}` locator=`{server.locator or 'n/a'}`"
+                )
+        else:
+            lines.append('- No MCP servers declared.')
+        lines.append(f"- Tool count: `{len(bundle.mcp_manifest.tools)}`")
+        lines.append(f"- Resource count: `{len(bundle.mcp_manifest.resources)}`")
+        lines.append(f"- Prompt count: `{len(bundle.mcp_manifest.prompts)}`")
+        lines.append(f"- Claim count: `{len(bundle.mcp_manifest.claims)}`")
+        lines.append('')
+
+    precheck = summary.get('precheck')
+    if precheck:
+        lines.extend(
+            [
+                '## Precheck',
+                '',
+                f"- Total rules: `{precheck['total_rules']}`",
+                f"- Benchmarkable rules: `{precheck['benchmarkable_rules']}`",
+                f"- Covered rules: `{precheck['covered_rules']}`",
+                f"- Missing rules: `{precheck['missing_rules']}`",
+                f"- Ambiguous rules: `{precheck['ambiguous_rules']}`",
+                f"- Requires confirmation: `{precheck['requires_confirmation']}`",
+                '',
+                '| Rule | Category | Severity | Benchmarkable | Family | Coverage |',
+                '| --- | --- | --- | --- | --- | --- |',
+            ]
+        )
+        for rule in precheck.get('rules', []):
+            lines.append(
+                (
+                    f"| `{rule['rule_id']}` | `{rule['category']}` | `{rule['severity']}` | "
+                    f"`{rule['benchmarkable']}` | `{rule.get('benchmark_family') or 'n/a'}` | "
+                    f"`{rule['coverage']['status']}` |"
+                )
+            )
+            lines.append(f"  - Raw: {rule['raw_text']}")
+            lines.append(f"  - Why: {rule['coverage']['explanation']}")
+        lines.append('')
+
+    if summary.get('md_summary') and summary.get('mcp_summary'):
+        md_summary = summary['md_summary']
+        mcp_summary = summary['mcp_summary']
+        lines.extend(
+            [
+                '## Benchmark Summary',
+                '',
+                f"- MD adherence: `{md_summary['adherence_rate']:.2%}`",
+                f"- MCP adherence: `{mcp_summary['adherence_rate']:.2%}`",
+                '',
+                '| Category | MD | MCP | Delta | Rule count |',
+                '| --- | ---: | ---: | ---: | ---: |',
+            ]
+        )
+        for item in summary.get('category_comparisons', []):
+            lines.append(
+                f"| `{item['category']}` | {item['md_rate']:.2%} | {item['mcp_rate']:.2%} | {item['delta']:.2%} | {item['rule_count']} |"
+            )
+        lines.append('')
+
+    if summary.get('rule_comparisons'):
+        lines.extend(['## Rule Comparisons', ''])
+        for item in summary['rule_comparisons']:
+            lines.extend(
+                [
+                    f"### `{item['rule_id']}`",
+                    '',
+                    f"- Category: `{item['category']}`",
+                    f"- MD verdict: `{item['md_verdict']}`",
+                    f"- MCP verdict: `{item['mcp_verdict']}`",
+                    f"- Delta: `{item['delta']:.2%}`",
+                    '- MD evidence:',
+                ]
+            )
+            for evidence in item['md_result'].get('evidence', []):
+                lines.append(f"  - {evidence}")
+            lines.append('- MCP evidence:')
+            for evidence in item['mcp_result'].get('evidence', []):
+                lines.append(f"  - {evidence}")
+            lines.append('')
+
+    if summary.get('runs'):
+        lines.extend(['## Condition Runs', ''])
+        for run in summary['runs']:
+            lines.extend(
+                [
+                    f"### `{run['condition']}` · `{run['task_id']}`",
+                    '',
+                    f"- Score: `{run['normalized_score']:.2%}`",
+                    f"- Instruction adherence: `{run['instruction_adherence_rate']:.2%}`",
+                    f"- Hard violations: `{run['hard_violation_count']}`",
+                    f"- Task success: `{run['task_success']}`",
+                ]
+            )
+            event_log_path = run_root / 'runs' / run['run_id'] / 'events.jsonl'
+            if event_log_path.exists():
+                lines.append(f"- Raw event log: `{event_log_path}`")
+            validations = run.get('validations') or []
+            if validations:
+                lines.append('- Validations:')
+                for validation in validations:
+                    lines.append(
+                        f"  - `{validation['id']}`: `{'pass' if validation['passed'] else 'fail'}` exit=`{validation['exit_code']}`"
+                    )
+            changed_files = run.get('changed_files') or []
+            if changed_files:
+                lines.append('- Changed files:')
+                for item in changed_files:
+                    lines.append(
+                        f"  - `{item['path']}` ({item['status']}) +{item['added_lines']} / -{item['removed_lines']}"
+                    )
+            lines.append('- Rule outcomes:')
+            for rule in run.get('rules', []):
+                evidence = ' | '.join(rule.get('evidence', [])[:2]) or 'No evidence.'
+                lines.append(f"  - `{rule['rule_id']}` `{rule['verdict']}` ({rule['severity']}): {evidence}")
+            lines.append('')
+
+    if studio_events:
+        lines.extend(['## Timeline', ''])
+        for event in studio_events:
+            lines.append(
+                f"- `{event.get('timestamp', 'unknown')}` `{event['event_type']}`: {_summarize_studio_event(event)}"
+            )
+        lines.append('')
+
+    lines.extend(
+        [
+            '## Artifacts',
+            '',
+            f"- Summary JSON: `{run_root / 'summary.json'}`",
+            f"- Studio events: `{run_root / 'studio_events.jsonl'}`",
+            f"- Bundle folder: `{run_root / 'bundle'}`",
+            f"- Runs folder: `{run_root / 'runs'}`",
+            '',
+        ]
+    )
+    return '\n'.join(lines)
+
+
+def _summarize_studio_event(event: dict[str, Any]) -> str:
+    payload = event.get('payload') or {}
+    event_type = event.get('event_type')
+    if event_type == 'source_ready':
+        return f"source_root=`{payload.get('source_root', 'n/a')}`"
+    if event_type == 'instructions_compiled':
+        return f"rule_count=`{payload.get('rule_count', 0)}` extraction_mode=`{payload.get('extraction_mode', 'n/a')}`"
+    if event_type == 'bundle_ready':
+        return (
+            f"supported_tasks=`{payload.get('supported_tasks', 0)}` "
+            f"alignment_issues=`{payload.get('alignment_issues', 0)}` "
+            f"repo_supported=`{payload.get('repo_supported', False)}`"
+        )
+    if event_type == 'precheck_ready':
+        precheck = payload.get('precheck') or {}
+        return (
+            f"covered=`{precheck.get('covered_rules', 0)}` "
+            f"missing=`{precheck.get('missing_rules', 0)}` "
+            f"ambiguous=`{precheck.get('ambiguous_rules', 0)}` "
+            f"requires_confirmation=`{precheck.get('requires_confirmation', False)}`"
+        )
+    if event_type == 'task_scheduled':
+        return f"task_id=`{payload.get('task_id', 'n/a')}` condition=`{payload.get('condition', 'n/a')}`"
+    if event_type == 'task_completed':
+        return (
+            f"task_id=`{payload.get('task_id', 'n/a')}` "
+            f"condition=`{payload.get('condition', 'n/a')}` "
+            f"score=`{payload.get('normalized_score', 'n/a')}` "
+            f"task_success=`{payload.get('task_success', 'n/a')}`"
+        )
+    if event_type == 'run_failed':
+        return str(payload.get('error', 'unknown error'))
+    if payload:
+        keys = list(payload.keys())[:3]
+        return ', '.join(f"{key}=`{payload[key]}`" for key in keys)
+    return 'no payload'
 
 
 def load_run_summaries(runs_dir: Path) -> list[dict[str, Any]]:

@@ -1,0 +1,47 @@
+[
+  {
+    "rule_id": "agents-1",
+    "status": "matched",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.benchmarkClaims[0]=Validate before concluding."
+    ],
+    "explanation": "Instruction rule is represented by the MCP manifest."
+  },
+  {
+    "rule_id": "extra:2",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.rippletide.type=http"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:3",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.rippletide.url=https://mcp.rippletide.com/mcp"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:4",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "server rippletide locator https://mcp.rippletide.com/mcp"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:5",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "server rippletide transport http"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  }
+]

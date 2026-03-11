@@ -13,6 +13,7 @@ COPY_IGNORE = shutil.ignore_patterns(
     '.git',
     '.venv',
     'node_modules',
+    'reports',
     'dist',
     'coverage',
     '__pycache__',
@@ -36,6 +37,8 @@ def snapshot_tree(root: Path) -> dict[str, str]:
         if not path.is_file():
             continue
         relative_path = path.relative_to(root)
+        if len(relative_path.parts) >= 2 and relative_path.parts[:2] == ('benchmark', 'reports'):
+            continue
         if any(
             part in {'.git', 'node_modules', '.venv', '__pycache__', '.pytest_cache', 'coverage', 'dist'}
             for part in relative_path.parts

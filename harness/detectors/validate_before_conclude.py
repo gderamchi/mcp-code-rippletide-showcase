@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import shlex
+from datetime import datetime
+from pathlib import Path
 
 from ..models import RuleResult, ScoringContext
 from .common import get_events
@@ -11,20 +13,49 @@ RULE_ID = '1_validate_before_conclude'
 
 def _unwrap_shell_command(command: str) -> str:
     parts = shlex.split(command)
-    if '-lc' in parts:
-        shell_index = parts.index('-lc')
+    for flag in ('-lc', '-c'):
+        if flag not in parts:
+            continue
+        shell_index = parts.index(flag)
         if shell_index + 1 < len(parts):
             return parts[shell_index + 1]
     return command
 
 
+def _is_env_assignment(token: str) -> bool:
+    if '=' not in token or token.startswith('='):
+        return False
+    key, _, _value = token.partition('=')
+    return key.replace('_', '').isalnum() and key[0].isalpha()
+
+
+def _normalize_token(token: str) -> str:
+    name = Path(token).name
+    if name == 'env':
+        return name
+    if name == 'runner':
+        return ''
+    if name.startswith('python') and all(char.isdigit() or char == '.' for char in name[6:]):
+        return 'python'
+    return token
+
+
 def _normalize_command(command: str) -> list[str]:
     normalized = []
-    for token in shlex.split(_unwrap_shell_command(command)):
+    tokens = shlex.split(_unwrap_shell_command(command))
+    while tokens and _is_env_assignment(tokens[0]):
+        tokens.pop(0)
+    for token in tokens:
         if token in {'--configLoader', 'runner'}:
             continue
-        normalized.append(token)
+        normalized_token = _normalize_token(token)
+        if normalized_token:
+            normalized.append(normalized_token)
     return normalized
+
+
+def _seconds_between(earlier: str, later: str) -> float:
+    return (datetime.fromisoformat(later) - datetime.fromisoformat(earlier)).total_seconds()
 
 
 def _commands_equivalent(required_command: str, actual_command: str) -> bool:
@@ -63,13 +94,23 @@ def detect(context: ScoringContext, weight: int, severity: str) -> RuleResult:
         (event['timestamp'] for event in reversed(get_events(context, 'file_write'))),
         None,
     )
+    effective_last_file_write = last_file_write
+    if (
+        effective_last_file_write is not None
+        and completion_timestamp is not None
+        and (
+            effective_last_file_write > completion_timestamp
+            or _seconds_between(effective_last_file_write, completion_timestamp) <= 1.0
+        )
+    ):
+        effective_last_file_write = None
 
     matched_required_commands: list[str] = []
     matched_actual_commands: list[str] = []
     for required_command in required_commands:
         for event in shell_commands:
             command = event['payload']['command']
-            if last_file_write and event['timestamp'] < last_file_write:
+            if effective_last_file_write and event['timestamp'] < effective_last_file_write:
                 continue
             if completion_timestamp and event['timestamp'] > completion_timestamp:
                 continue

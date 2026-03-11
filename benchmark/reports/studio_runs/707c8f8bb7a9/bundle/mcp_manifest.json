@@ -1,0 +1,37 @@
+{
+  "servers": [
+    {
+      "id": "local_demo",
+      "transport": "inline",
+      "locator": "",
+      "enabled": true
+    }
+  ],
+  "tools": [
+    "local_demo:validate before concluding"
+  ],
+  "resources": [],
+  "prompts": [],
+  "claims": [
+    "$.mcpServers.local_demo.tools[0].name=validate before concluding",
+    "$.mcpServers.local_demo.type=inline",
+    "server local_demo transport inline",
+    "tool local_demo:validate before concluding"
+  ],
+  "provenance": {
+    "has_servers": true,
+    "claim_count": 4
+  },
+  "raw_config": {
+    "mcpServers": {
+      "local_demo": {
+        "type": "inline",
+        "tools": [
+          {
+            "name": "validate before concluding"
+          }
+        ]
+      }
+    }
+  }
+}

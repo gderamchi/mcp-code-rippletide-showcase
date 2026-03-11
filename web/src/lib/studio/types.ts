@@ -3,6 +3,7 @@ export interface CreateStudioRunInput {
   repoPath: string;
   repoArchive: File | null;
   instructionFiles: File[];
+  instructionMarkdown: string;
   mcpJson: string;
   mcpSourceType?: 'inline' | 'file' | 'command';
   mcpSourcePath?: string;

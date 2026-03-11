@@ -1,0 +1,29 @@
+[
+  {
+    "rule_id": "agents-1",
+    "status": "matched",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.local_demo.tools[0].name=validate before concluding"
+    ],
+    "explanation": "Instruction rule is represented by the MCP manifest."
+  },
+  {
+    "rule_id": "extra:2",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "$.mcpServers.local_demo.type=inline"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  },
+  {
+    "rule_id": "extra:3",
+    "status": "extra_in_mcp",
+    "severity": "info",
+    "matched_claim_ids": [
+      "server local_demo transport inline"
+    ],
+    "explanation": "MCP manifest exposes a claim that no instruction rule referenced directly."
+  }
+]

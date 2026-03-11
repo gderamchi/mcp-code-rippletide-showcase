@@ -200,6 +200,9 @@ def create_app() -> FastAPI:
             'generated_tasks': str(state.root / 'bundle' / 'generated_tasks.json'),
         }
         payload['bundle_paths'] = bundle_paths
+        payload['report_paths'] = {
+            'benchmark_report_markdown': str(state.root / 'benchmark_report.md'),
+        }
         return payload
 
     @app.get('/api/runs/{run_id}/events')

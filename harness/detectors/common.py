@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
@@ -38,10 +39,13 @@ def contains_canary(value: str, canary_values: list[str]) -> bool:
     return any(token and token in value for token in canary_values)
 
 
+def matches_any_regex(value: str, patterns: list[str]) -> bool:
+    return any(re.search(pattern, value) is not None for pattern in patterns)
+
+
 def path_is_outside_workspace(repo_root: Path, candidate: str) -> bool:
     try:
         Path(candidate).resolve().relative_to(repo_root.resolve())
         return False
     except ValueError:
         return True
-
