@@ -46,12 +46,16 @@ GITHUB_TOKEN=ghp_xxx \
   --num-rules 40
 ```
 
+**`--project-root`** is the output directory for the benchmark scaffolding, not the targeted repo itself. Bare names resolve to `~/projects/<name>`, so `--project-root my-benchmark` → `~/projects/my-benchmark/`. The targeted repo (from `--repo`) is cloned *into* that directory, alongside all generated benchmark artifacts (`benchmark/tasks/`, `benchmark/reports/`, etc.).
+
 This:
 1. Clones the repo into `~/projects/my-benchmark/`
 2. Fetches up to 250 merged PRs from GitHub, skips maintenance commits
 3. For each qualifying PR: splits files into test vs implementation, creates a reverse-diff patch, writes a prompt from the PR title and description, writes the task JSON
 4. Scaffolds `benchmark/tasks/`, `benchmark/prompts/`, `benchmark/fixtures/`, `protected/canary.env`
 5. **`--generate-rules`**: inspects the cloned repo (README, language markers, test framework, file tree) and calls `claude -p` to generate 40 coding rules tailored to that specific codebase. Written to `benchmark/instructions/condition_md/instructions.md`. These become the rules the MD condition injects into the agent's prompt — and that the MCP condition is evaluated against.
+
+**Which LLM is called:** Only the rules generation step (`--generate-rules`) invokes an LLM — it calls `claude -p` (the Claude CLI in non-interactive mode). The PR-to-task conversion (steps 2–4 above) is done programmatically without any LLM call.
 
 Omit `--generate-rules` if you want to supply your own instruction file manually via `--instructions-source` at run time.
 
